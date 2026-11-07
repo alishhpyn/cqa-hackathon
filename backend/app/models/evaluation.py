@@ -7,7 +7,9 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     DateTime,
-    Text
+    Text,
+    Index,
+    text
 )
 from sqlalchemy.sql import func
 
@@ -16,6 +18,17 @@ from app.database.database import Base
 
 class Evaluation(Base):
     __tablename__ = "evaluations"
+
+    __table_args__ = (
+        Index(
+            "uq_active_evaluation",
+            "conversation_id",
+            "checklist_id",
+            "checklist_version",
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'running')")
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -30,7 +43,6 @@ class Evaluation(Base):
     score = Column(Float, nullable=True)
     gross_violation = Column(Boolean, default=False)
 
-    # AI evaluation fields
     status = Column(String, nullable=False, default="completed")
     checklist_version = Column(String, nullable=True)
     result_json = Column(Text, nullable=True)

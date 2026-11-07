@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.schemas.evaluation import EvaluationRequest
 from app.services.scoring_service import calculate_score
+from sqlalchemy.exc import IntegrityError
 
 from app.services.conversation_service import (
     get_all_conversations,
@@ -24,6 +25,11 @@ from datetime import datetime, timezone
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Ensure indexes are created for existing database tables
+for index in Evaluation.__table__.indexes:
+    if index.name == "uq_active_evaluation":
+        index.create(bind=engine, checkfirst=True)
 
 app = FastAPI(
     title="CQA Backend",
@@ -66,15 +72,15 @@ def list_conversations():
 # AI Evaluations
 # -------------------------
 
+
+
 @app.post("/api/evaluations", status_code=202)
 def create_ai_evaluation(
     request: AIEvaluationRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    conversation = get_conversation_by_id(
-        request.conversation_id
-    )
+    conversation = get_conversation_by_id(request.conversation_id)
 
     if conversation is None:
         raise HTTPException(
@@ -92,6 +98,23 @@ def create_ai_evaluation(
             detail="Checklist not found"
         )
 
+    # Check for an existing active evaluation
+    existing_evaluation = db.query(Evaluation).filter(
+        Evaluation.conversation_id == request.conversation_id,
+        Evaluation.checklist_id == request.checklist_id,
+        Evaluation.checklist_version == request.checklist_version,
+        Evaluation.status.in_(["queued", "running"])
+    ).order_by(Evaluation.id.desc()).first()
+
+    if existing_evaluation:
+        return {
+            "evaluation_id": existing_evaluation.id,
+            "conversation_id": existing_evaluation.conversation_id,
+            "checklist_id": existing_evaluation.checklist_id,
+            "checklist_version": existing_evaluation.checklist_version,
+            "status": existing_evaluation.status
+        }
+
     evaluation = Evaluation(
         conversation_id=request.conversation_id,
         checklist_id=checklist.id,
@@ -101,9 +124,35 @@ def create_ai_evaluation(
         gross_violation=False
     )
 
-    db.add(evaluation)
-    db.commit()
-    db.refresh(evaluation)
+    try:
+        db.add(evaluation)
+        db.commit()
+        db.refresh(evaluation)
+
+    except IntegrityError:
+        db.rollback()
+
+        # Another request created the active evaluation first
+        existing_evaluation = db.query(Evaluation).filter(
+            Evaluation.conversation_id == request.conversation_id,
+            Evaluation.checklist_id == request.checklist_id,
+            Evaluation.checklist_version == request.checklist_version,
+            Evaluation.status.in_(["queued", "running"])
+        ).order_by(Evaluation.id.desc()).first()
+
+        if existing_evaluation:
+            return {
+                "evaluation_id": existing_evaluation.id,
+                "conversation_id": existing_evaluation.conversation_id,
+                "checklist_id": existing_evaluation.checklist_id,
+                "checklist_version": existing_evaluation.checklist_version,
+                "status": existing_evaluation.status
+            }
+
+        raise HTTPException(
+            status_code=409,
+            detail="Could not create evaluation. Please try again."
+        )
 
     background_tasks.add_task(
         process_ai_evaluation,
@@ -117,6 +166,7 @@ def create_ai_evaluation(
         "checklist_version": evaluation.checklist_version,
         "status": evaluation.status
     }
+
 
 
 @app.get("/api/evaluations/{evaluation_id}")
