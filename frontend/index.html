@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Freedom Dialog — AI Оценка качества диалогов</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#E8F7F0',
+              100: '#C7EEDC',
+              200: '#95E0BE',
+              500: '#00A859',
+              600: '#00934E',
+              700: '#007A41',
+              800: '#084C2C',
+              900: '#0B3320',
+              950: '#051E13',
+            },
+            surface: {
+              bg: '#F2F6F3',
+              card: '#FFFFFF',
+              border: '#E1E9E4',
+              hover: '#F8FAF9'
+            },
+            charcoal: {
+              900: '#141E19',
+              800: '#23322B',
+              600: '#4D5E56',
+              400: '#81938A',
+              200: '#D5DFD9'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f3; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #cbd8d1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a2b7ac; }
+    
+    .transcript-turn.active-highlight {
+      background-color: #E8F7F0 !important;
+      border-color: #00A859 !important;
+      box-shadow: 0 0 0 2px rgba(0, 168, 89, 0.25);
+      transform: scale(1.008);
+      transition: all 0.25s ease;
+    }
+
+    .pulse-ring {
+      animation: pulseGlow 1.8s infinite;
+    }
+    @keyframes pulseGlow {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+  </style>
+</head>
+<body class="bg-[#F2F6F3] text-charcoal-900 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- TOP HEADER / BRAND BAR (Freedom Broker Fintech Dark-Emerald) -->
+  <header class="bg-brand-950 text-white border-b border-brand-800 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand Logo & Badge -->
+      <div class="flex items-center gap-4">
+        <a href="#" onclick="switchTab('dialog-card')" class="flex items-center gap-3 group">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-500 shadow-inner group-hover:bg-brand-500/30 transition">
+            <!-- Dialog Sparkle Icon -->
+            <svg class="w-5 h-5 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-lg tracking-tight text-white font-mono">FREEDOM</span>
+              <span class="text-xs uppercase tracking-widest px-1.5 py-0.5 rounded bg-brand-500 text-brand-950 font-bold">DIALOG</span>
+            </div>
+            <p class="text-[11px] text-charcoal-400 font-medium">Quality Assurance AI • Freedom Broker</p>
+          </div>
+        </a>
+
+        <div class="hidden md:flex items-center gap-2 pl-4 ml-4 border-l border-brand-800 text-xs">
+          <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Groq LLaMA-3.3 70B
+          </span>
+          <span id="api-mode-badge" class="px-2 py-0.5 rounded-full bg-brand-800/80 text-brand-200 border border-brand-700/60 font-mono text-[10px]">
+            Демо · Пример оценок
+          </span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center gap-1 sm:gap-2">
+        <button id="nav-dialogs" onclick="switchTab('dialogs')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition text-charcoal-400 hover:text-white hover:bg-brand-900/60">
+          Диалоги
+        </button>
+        <button id="nav-dialog-card" onclick="switchTab('dialog-card')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition bg-brand-600 text-white shadow-sm font-semibold">
+          Карточка диалога
+        </button>
+        <button id="nav-checklists" onclick="switchTab('checklists')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition text-charcoal-400 hover:text-white hover:bg-brand-900/60">
+          Чек-листы
+        </button>
+        <button id="nav-appeals" onclick="switchTab('appeals')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition text-charcoal-400 hover:text-white hover:bg-brand-900/60 relative">
+          Апелляции
+          <span id="appeals-counter" class="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-charcoal-900 font-bold">1</span>
+        </button>
+        <button onclick="toggleApiModal()" title="Настройки API / FastAPI" class="ml-2 p-2 rounded-lg bg-brand-900/80 text-charcoal-300 hover:text-white border border-brand-800 hover:border-brand-700 transition">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </nav>
+
+    </div>
+  </header>
+
+  <!-- QUICK INFO BAR / TOAST NOTIFICATION AREA -->
+  <div id="toast-banner" class="hidden bg-emerald-50 border-b border-emerald-200 text-emerald-900 px-4 py-2 text-xs flex justify-between items-center transition">
+    <div class="flex items-center gap-2 max-w-7xl mx-auto w-full">
+      <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+      <span id="toast-text" class="font-medium"></span>
+      <button onclick="document.getElementById('toast-banner').classList.add('hidden')" class="ml-auto text-emerald-700 hover:text-emerald-950 font-bold">&times;</button>
+    </div>
+  </div>
+
+  <!-- MAIN APP CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ========================================================================= -->
+    <!-- SCREEN 1: ДИАЛОГИ (Список, фильтры, таблица)                             -->
+    <!-- ========================================================================= -->
+    <p id="demo-score-note" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Демо-режим. Баллы показаны для примера. Для новой оценки подключите сервер в настройках.</p>
+    <section id="view-dialogs" class="hidden space-y-5">
+      <h1 class="text-2xl font-bold">Диалоги</h1>
+      <p id="api-connection-status" role="status" class="text-sm text-charcoal-600 empty:hidden"></p>
+      <button id="api-retry" hidden class="text-sm font-semibold text-brand-700">Повторить подключение</button>
+      <form id="group-import" class="bg-white p-4 rounded-2xl border border-surface-border">
+        <label for="group-id" class="block text-sm font-semibold">ID набора</label>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <input id="group-id" required maxlength="128" placeholder="Например, DEV"
+            class="flex-1 min-w-32 rounded-xl border border-surface-border px-3 py-2">
+          <button class="rounded-xl bg-brand-600 text-white px-4 py-2 font-semibold disabled:opacity-50">Загрузить набор</button>
+        </div>
+        <p class="text-xs text-charcoal-600 mt-2">Введите ID, который выдали организаторы.</p>
+        <p id="import-status" role="status" class="text-sm mt-2"></p>
+      </form>
+
+      <!-- Filters & Search Toolbar -->
+      <div class="bg-white p-4 rounded-2xl border border-surface-border shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        <div class="relative flex-1">
+          <input type="text" id="filter-search" oninput="applyFilters()" placeholder="Поиск по ID диалога" class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#F8FAF9] border border-surface-border text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition">
+          <svg class="w-4 h-4 text-charcoal-400 absolute left-3.5 top-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Language filter -->
+          <select id="filter-lang" onchange="applyFilters()" class="px-3 py-2.5 rounded-xl bg-[#F8FAF9] border border-surface-border text-xs font-medium text-charcoal-800 focus:outline-none focus:border-brand-500">
+            <option value="ALL">Все языки (RU / KZ / EN)</option>
+            <option value="RU">Русский (RU)</option>
+            <option value="KZ">Қазақша (KZ)</option>
+            <option value="EN">English (EN)</option>
+          </select>
+
+          <!-- Channel filter -->
+          <select id="filter-channel" onchange="applyFilters()" class="px-3 py-2.5 rounded-xl bg-[#F8FAF9] border border-surface-border text-xs font-medium text-charcoal-800 focus:outline-none focus:border-brand-500">
+            <option value="ALL">Все каналы</option>
+            <option value="Чат">Чат приложения</option>
+            <option value="Звонок">Телефония (Аудио)</option>
+            <option value="Telegram">Telegram Bot</option>
+          </select>
+
+          <!-- Status filter -->
+          <select id="filter-status" onchange="applyFilters()" class="px-3 py-2.5 rounded-xl bg-[#F8FAF9] border border-surface-border text-xs font-medium text-charcoal-800 focus:outline-none focus:border-brand-500">
+            <option value="ALL">Все статусы</option>
+            <option value="Готово">Готово</option>
+            <option value="Не оценён">Не оценён</option>
+            <option value="Оценивается">Оценивается</option>
+            <option value="В очереди">В очереди</option>
+            <option value="Ошибка">Ошибка</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="bg-white rounded-2xl border border-surface-border shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-[#F8FAF9] border-b border-surface-border text-xs text-charcoal-600 font-semibold uppercase tracking-wider">
+              <tr>
+                <th class="py-3.5 px-4">ID диалога</th>
+                <th class="py-3.5 px-3">Язык</th>
+                <th class="py-3.5 px-3">Канал</th>
+                <th class="py-3.5 px-4">Оператор / Клиент</th>
+                <th class="py-3.5 px-3">Статус</th>
+                <th class="py-3.5 px-4 text-center">Итоговый балл</th>
+                <th class="py-3.5 px-4 text-right">Действие</th>
+              </tr>
+            </thead>
+            <tbody id="dialogs-table-body" class="divide-y divide-surface-border text-charcoal-800">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- SCREEN 2: КАРТОЧКА ДИАЛОГА (Главный экран, сплит транскрипт + ИИ оценка)  -->
+    <!-- ========================================================================= -->
+    <section id="view-dialog-card" class="space-y-5">
+      
+      <!-- Top Meta Banner & Actions Bar -->
+      <div class="bg-white rounded-2xl border border-surface-border p-5 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          
+          <!-- Left: Meta details & Badges -->
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-brand-500 animate-pulse"></span>
+              <h2 id="card-dialog-id" class="text-xl font-bold font-mono text-charcoal-900">FRD-2025-0891</h2>
+            </div>
+
+            <div class="flex items-center gap-2 text-xs font-medium">
+              <span id="card-lang-badge" class="px-2.5 py-1 rounded-md bg-emerald-50 text-brand-700 border border-emerald-200 font-semibold font-mono">
+                RU • Русский
+              </span>
+              <span id="card-channel-badge" class="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                Чат мобильного приложения
+              </span>
+              <span id="card-status-badge" class="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold">
+                Готово
+              </span>
+            </div>
+          </div>
+
+          <!-- Right: Checklist version selector & Evaluate Button -->
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="flex items-center gap-2 text-xs">
+              <label for="select-checklist-ver" class="text-charcoal-600 font-medium whitespace-nowrap">Чек-лист</label>
+              <select id="select-checklist-ver" class="px-3 py-2 rounded-xl bg-[#F8FAF9] border border-surface-border text-xs font-semibold text-charcoal-900 focus:outline-none focus:border-brand-500">
+                <option value="v2.4">Freedom QA Core v2.4 (Активная)</option>
+                <option value="v2.3">Freedom QA Core v2.3 (Архив)</option>
+                <option value="v2.5-draft">Freedom QA v2.5 Draft (Строгая)</option>
+              </select>
+            </div>
+
+            <!-- Main CTA Button -->
+            <button id="btn-evaluate" onclick="startEvaluationProcess()" class="bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-2">
+              <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>Оценить</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Optional Audio Player Bar (for voice calls) -->
+        <div id="audio-player-container" class="mt-4 pt-3 border-t border-surface-border flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-brand-500 text-white flex items-center justify-center cursor-pointer hover:bg-brand-600">
+              <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-charcoal-900">Запись аудиовызова #REC-9812-SIP</p>
+              <p class="text-[11px] text-charcoal-600 font-mono">03:42 • 16 kHz WAV • Канал оператора + клиента</p>
+            </div>
+          </div>
+          <div class="w-1/3 bg-slate-200 h-2 rounded-full overflow-hidden relative">
+            <div class="bg-brand-500 w-1/3 h-full rounded-full"></div>
+          </div>
+          <span class="text-xs text-charcoal-600 font-mono">01:14 / 03:42</span>
+        </div>
+      </div>
+
+      <!-- State: Error Notification (if failed) -->
+      <div id="eval-error-alert" class="hidden bg-red-50 border border-red-200 text-red-800 p-4 rounded-2xl flex items-start justify-between">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-red-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <div>
+            <h4 class="font-bold text-sm">Ошибка обработки диалога моделью LLaMA</h4>
+            <p class="text-xs text-red-700 mt-0.5" id="eval-error-message">Таймаут шлюза FastAPI. Проверьте соединение с локальным сервером.</p>
+          </div>
+        </div>
+        <button onclick="startEvaluationProcess()" class="text-xs bg-red-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:bg-red-700">Повторить</button>
+      </div>
+
+      <!-- State: In progress Banner -->
+      <div id="eval-loading-alert" class="hidden bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          <div>
+            <span class="text-sm font-bold text-emerald-900">Идёт оценка…</span>
+          </div>
+        </div>
+        <span class="text-xs font-mono bg-white px-2.5 py-1 rounded border border-emerald-300 text-emerald-800 font-bold" id="eval-timer">Опрос: 2с...</span>
+      </div>
+
+      <!-- MAIN SPLIT WORKSPACE: Left (Transcript) / Right (Evaluation Results) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- LEFT COLUMN: ТРАНСКРИПТ ДИАЛОГА (6 Cols on Desktop) -->
+        <div class="lg:col-span-6 space-y-3">
+          <div class="bg-white rounded-2xl border border-surface-border p-4 shadow-sm flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-charcoal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"/></svg>
+              <h3 class="font-bold text-sm text-charcoal-900">Стенограмма диалога</h3>
+              <span id="turns-count-badge" class="px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-charcoal-600 font-mono font-medium">8 реплик</span>
+            </div>
+            <div class="text-xs text-charcoal-400">
+              Клик по доказательству справа подсветит реплику
+            </div>
+          </div>
+
+          <!-- Transcript Scrollable Feed -->
+          <div id="transcript-feed" class="space-y-3 max-h-[720px] overflow-y-auto pr-1">
+            <!-- Dynamically populated via JS -->
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: РЕЗУЛЬТАТЫ ИИ-ОЦЕНКИ (6 Cols on Desktop) -->
+        <div class="lg:col-span-6 space-y-4">
+          
+          <!-- Score Summary Card -->
+          <div class="bg-white rounded-2xl border border-surface-border p-5 shadow-sm">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-charcoal-400">Итоговый балл качества</span>
+                <div class="flex items-baseline gap-2 mt-1">
+                  <span id="score-number" class="text-4xl font-extrabold text-charcoal-900 font-mono">92</span>
+                  <span class="text-lg text-charcoal-400 font-mono font-medium">/ 100</span>
+                </div>
+              </div>
+
+              <!-- Critical Flaw Flag -->
+              <div id="critical-flaw-box" class="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div class="text-left">
+                  <div class="text-[11px] font-bold uppercase">Грубые ошибки</div>
+                  <div class="text-xs font-medium" id="critical-flaw-text">Не обнаружено (Чисто)</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick progress bar -->
+            <div class="w-full bg-slate-100 h-2.5 rounded-full mt-4 overflow-hidden">
+              <div id="score-bar" class="bg-brand-500 h-full rounded-full transition-all duration-500" style="width: 92%;"></div>
+            </div>
+            
+            <div class="flex justify-between items-center text-[11px] text-charcoal-400 mt-2 font-mono">
+              <span>Порог прохождения: 80 баллов</span>
+              <span id="score-evaluation-timestamp">Оценено: 08.03.2025, 14:32</span>
+            </div>
+          </div>
+
+          <!-- Criteria Cards List -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between px-1">
+              <h4 class="font-bold text-sm text-charcoal-900">Оценка по критериям регламента</h4>
+              <span class="text-xs text-charcoal-400">Вес критериев нормализован</span>
+            </div>
+
+            <div id="criteria-container" class="space-y-3">
+              <!-- Dynamically populated via JS -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- SCREEN 3: ЧЕК-ЛИСТЫ (Редактор правил, весов, шкал и условий N/A)        -->
+    <!-- ========================================================================= -->
+    <section id="view-checklists" class="hidden space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-charcoal-900 tracking-tight">Регламенты и Чек-листы Freedom Broker</h1>
+          <p class="text-sm text-charcoal-600">Настройка критериев валидации, шкал оценивания и триггеров для AI-инференса</p>
+        </div>
+        <button onclick="openNewCriterionModal()" class="bg-brand-500 hover:bg-brand-600 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Добавить критерий
+        </button>
+      </div>
+
+      <!-- Checklist meta card -->
+      <div class="bg-white rounded-2xl border border-surface-border p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div class="flex items-center gap-3">
+            <span class="font-mono text-sm px-2.5 py-1 rounded bg-brand-50 text-brand-700 font-bold border border-emerald-200">ID: chk_freedom_fintech_core</span>
+            <span class="text-xs font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">Версия: v2.4 (Current)</span>
+          </div>
+          <h3 class="text-base font-bold text-charcoal-900 mt-2">Стандарт обслуживания клиентов брокерских и депозитарных сервисов</h3>
+          <p class="text-xs text-charcoal-600 mt-0.5">Включает контроль регуляторных рисков, точность ставок и соблюдение корпоративной этики.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="saveChecklistNewVersion()" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition shadow-sm">
+            Опубликовать v2.5
+          </button>
+        </div>
+      </div>
+
+      <!-- Criteria Table / Editor -->
+      <div class="bg-white rounded-2xl border border-surface-border shadow-sm overflow-hidden">
+        <div class="p-4 border-b border-surface-border bg-[#F8FAF9] flex items-center justify-between">
+          <h4 class="font-bold text-sm text-charcoal-900">Список активных правил (6 критериев)</h4>
+          <span class="text-xs text-charcoal-400 font-mono">Сумма базовых весов: 100%</span>
+        </div>
+        <div class="divide-y divide-surface-border" id="checklist-editor-list">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================= -->
+    <!-- SCREEN 4: АПЕЛЛЯЦИИ (Арбитраж, подтверждение или корректировка)          -->
+    <!-- ========================================================================= -->
+    <section id="view-appeals" class="hidden space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold text-charcoal-900 tracking-tight">Арбитраж и Апелляции</h1>
+          <p class="text-sm text-charcoal-600">Рассмотрение оспариваемых оценок качества, поданных операторами или супервайзерами</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-charcoal-400">Статус:</span>
+          <span class="text-xs font-bold bg-amber-100 text-amber-900 px-3 py-1 rounded-full border border-amber-200">1 на рассмотрении</span>
+        </div>
+      </div>
+
+      <div id="appeals-list-container" class="space-y-4">
+        <!-- Dynamically populated via JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: ОСПОРИТЬ ОЦЕНКУ (Подача апелляции)                                -->
+  <!-- ========================================================================= -->
+  <div id="modal-dispute" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full border border-surface-border shadow-2xl p-6 space-y-4 animate-scaleUp">
+      <div class="flex items-center justify-between pb-3 border-b border-surface-border">
+        <h3 class="font-bold text-base text-charcoal-900">Подать апелляцию по критерию</h3>
+        <button onclick="closeDisputeModal()" class="text-charcoal-400 hover:text-charcoal-800 text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <span class="text-xs text-charcoal-400">Критерий:</span>
+          <p id="modal-dispute-criterion-title" class="font-bold text-sm text-charcoal-900">Приветствие и идентификация</p>
+        </div>
+
+        <div class="p-3 bg-slate-50 rounded-xl text-xs space-y-1">
+          <div class="flex justify-between">
+            <span class="text-charcoal-400">Текущая оценка ИИ:</span>
+            <span id="modal-dispute-current-score" class="font-bold text-red-600">0 / 15</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-charcoal-400">Реплика доказательства:</span>
+            <span id="modal-dispute-turn-ref" class="font-mono font-semibold text-brand-700">Реплика №1</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-charcoal-800 mb-1">Причина несогласия с оценкой:</label>
+          <textarea id="modal-dispute-comment" rows="3" placeholder="Укажите, почему ответ ИИ некорректен (например: клиент написал первым и сразу задал вопрос, оператор поздоровался в реплике №2)..." class="w-full text-xs p-3 rounded-xl border border-surface-border bg-[#F8FAF9] focus:outline-none focus:border-brand-500 focus:bg-white"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-charcoal-800 mb-1">Предлагаемый балл:</label>
+          <input type="number" id="modal-dispute-proposed-score" value="15" min="0" max="30" class="w-24 text-xs font-mono font-bold p-2.5 rounded-xl border border-surface-border bg-[#F8FAF9]">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-surface-border">
+        <button onclick="closeDisputeModal()" class="px-4 py-2 rounded-xl text-xs font-medium text-charcoal-600 hover:bg-slate-100">Отмена</button>
+        <button onclick="submitDisputeAppeal()" class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-500 hover:bg-brand-600 text-white shadow-sm">Отправить на арбитраж</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: НАСТРОЙКИ API & ИНТЕГРАЦИЯ FASTAPI                                -->
+  <!-- ========================================================================= -->
+  <div id="modal-api-settings" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-xl w-full border border-surface-border shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-surface-border">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.065-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/></svg>
+          </div>
+          <h3 class="font-bold text-base text-charcoal-900">Конфигурация FastAPI & API Module</h3>
+        </div>
+        <button onclick="toggleApiModal()" class="text-charcoal-400 hover:text-charcoal-800 text-xl font-bold">&times;</button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div class="hidden p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900">
+          <p class="font-semibold"> Архитектурное разделение UI и API:</p>
+          <p class="mt-1 text-[11px] text-emerald-800">Все сетевые вызовы инкапсулированы в модуле <code class="bg-white/80 px-1 py-0.5 rounded font-mono font-bold">window.FreedomAPI</code>. Синтетические диалоги доступны в демонстрационном режиме.</p>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-charcoal-800 mb-1">Режим работы клиента:</label>
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="api-mode-radio" value="mock" checked onchange="toggleApiMode(this.value)" class="text-brand-500">
+              <span class="font-medium">Демо-режим (Синтетические данные)</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="api-mode-radio" value="live" onchange="toggleApiMode(this.value)" class="text-brand-500">
+              <span class="font-medium text-brand-700">Подключить FastAPI бэкенд</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-charcoal-800 mb-1">Базовый URL бэкенда (Base URL):</label>
+          <input type="text" id="api-base-url-input" value="http://localhost:8000" class="w-full p-2.5 rounded-xl border border-surface-border font-mono text-xs focus:outline-none focus:border-brand-500">
+          <p class="text-[10px] text-charcoal-400 mt-1">Пример: http://127.0.0.1:8000 или http://api.dialog.internal</p>
+        </div>
+
+        <div class="hidden bg-slate-50 p-3 rounded-xl border border-surface-border">
+          <p class="font-semibold text-charcoal-800 mb-1">Спецификация используемых эндпоинтов:</p>
+          <div class="font-mono text-[10px] text-charcoal-600 space-y-1">
+            <div><span class="text-emerald-700 font-bold">GET</span> /api/conversations</div>
+            <div><span class="text-emerald-700 font-bold">GET</span> /api/conversations/{id}</div>
+            <div><span class="text-emerald-700 font-bold">GET</span> /api/checklists</div>
+            <div><span class="text-blue-700 font-bold">POST</span> /api/checklists/{id}/versions</div>
+            <div><span class="text-blue-700 font-bold">POST</span> /api/evaluations (body: conversation_id, checklist_id, checklist_version)</div>
+            <div><span class="text-emerald-700 font-bold">GET</span> /api/evaluations/{id} (поллинг статуса каждые 2-3 сек)</div>
+            <div><span class="text-blue-700 font-bold">POST</span> /api/appeals</div>
+            <div><span class="text-emerald-700 font-bold">GET</span> /api/appeals</div>
+            <div><span class="text-blue-700 font-bold">POST</span> /api/appeals/{id}/review</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-3 border-t border-surface-border">
+        <button onclick="saveApiSettings()" class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-500 hover:bg-brand-600 text-white">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT: DATA STORE, API CLIENT & INTERACTIVE LOGIC                   -->
+  <!-- ========================================================================= -->
+  <script>
+    /**
+     * =========================================================================
+     * МОДУЛЬ API (api.js / FreedomAPI)
+     * Инкапсулирует вызовы к FastAPI бэкенду и синтетическому мок-провайдеру.
+     * =========================================================================
+     */
+    window.FreedomAPI = {
+      baseUrl: 'http://localhost:8000',
+      isLive: false, // по умолчанию ДЕМО-режим
+
+      setBaseUrl(url) {
+        this.baseUrl = url;
+      },
+
+      setLiveMode(enabled) {
+        this.isLive = enabled;
+      },
+
+      // 1. Получить список всех диалогов
+      async getDialogs() {
+        if (this.isLive) {
+          try {
+            const res = await fetch(`${this.baseUrl}/api/conversations`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+          } catch (e) {
+            console.warn('FastAPI недоступен, фолбэк на демо-данные:', e);
+            return mockDialogsData;
+          }
+        }
+        return Promise.resolve(mockDialogsData);
+      },
+
+      // 2. Получить конкретный диалог с репликами
+      async getDialogById(id) {
+        if (this.isLive) {
+          try {
+            const res = await fetch(`${this.baseUrl}/api/conversations/${id}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+          } catch (e) {
+            console.warn('FastAPI недоступен, фолбэк на демо:', e);
+            return mockDialogsData.find(d => d.id === id) || mockDialogsData[0];
+          }
+        }
+        return Promise.resolve(mockDialogsData.find(d => d.id === id) || mockDialogsData[0]);
+      },
+
+      // 3. Получить чек-листы
+      async getChecklists() {
+        if (this.isLive) {
+          try {
+            const res = await fetch(`${this.baseUrl}/api/checklists`);
+            return await res.json();
+          } catch (e) {
+            return mockChecklistData;
+          }
+        }
+        return Promise.resolve(mockChecklistData);
+      },
+
+      // 4. Запустить оценку диалога ИИ (FastAPI -> Groq)
+      async createEvaluation(conversationId, checklistId, checklistVersion) {
+        if (this.isLive) {
+          const res = await fetch(`${this.baseUrl}/api/evaluations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              conversation_id: conversationId,
+              checklist_id: checklistId,
+              checklist_version: checklistVersion
+            })
+          });
+          return await res.json(); // { evaluation_id: '...', status: 'queued' }
+        }
+
+        // Синтетический возврат
+        return Promise.resolve({
+          evaluation_id: 'eval_' + Math.random().toString(36).substring(2, 9),
+          status: 'evaluating'
+        });
+      },
+
+      // 5. Поллинг статуса оценки (2-3 сек)
+      async getEvaluationStatus(evalId) {
+        if (this.isLive) {
+          const res = await fetch(`${this.baseUrl}/api/evaluations/${evalId}`);
+          return await res.json();
+        }
+
+        // Симуляция завершения оценки в демо-режиме
+        return Promise.resolve({
+          status: 'completed',
+          score: 92,
+          critical_flaw: false,
+          criteria_results: currentActiveDialog.evaluation.criteria
+        });
+      },
+
+      // 6. Подача апелляции
+      async createAppeal(evalId, criterionKey, comment, proposedScore) {
+        if (this.isLive) {
+          const res = await fetch(`${this.baseUrl}/api/evaluations/${evalId}/appeals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              criterion_key: criterionKey,
+              comment: comment,
+              proposed_score: proposedScore
+            })
+          });
+          return await res.json();
+        }
+        return Promise.resolve({ status: 'submitted', appeal_id: 'app_' + Date.now() });
+      },
+
+      // 7. Получить список апелляций
+      async getAppeals() {
+        return Promise.resolve(mockAppealsData);
+      },
+
+      // 8. Решение по апелляции
+      async submitAppealDecision(appealId, action, newScore, reason) {
+        if (this.isLive) {
+          const res = await fetch(`${this.baseUrl}/api/appeals/${appealId}/decision`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, new_score: newScore, reason })
+          });
+          return await res.json();
+        }
+        return Promise.resolve({ status: 'resolved', appealId });
+      }
+    };
+
+    /**
+     * =========================================================================
+     * ДЕМО-ДАННЫЕ (Синтетические диалоги Freedom Broker)
+     * =========================================================================
+     */
+    const mockDialogsData = [
+      {
+        id: "FRD-2025-0891",
+        lang: "RU",
+        langTitle: "RU • Русский",
+        channel: "Чат",
+        channelTitle: "Чат мобильного приложения",
+        operator: "Алиса Ибраева (Freedom Broker Support)",
+        client: "Данияр С. (Премиум-инвестор)",
+        status: "Готово",
+        score: 92,
+        criticalFlaw: false,
+        hasAudio: false,
+        turns: [
+          { turn_id: 1, role: "client", author: "Данияр С.", time: "14:10:02", text: "Здравствуйте! Почему у меня заблокировалась заявка на покупку акций Kcell на KASE?" },
+          { turn_id: 2, role: "operator", author: "Алиса И.", time: "14:10:24", text: "Добрый день, Данияр! Меня зовут Алиса, брокерский сервис Freedom Broker. Буду рада помочь вам разобраться с поручением на бирже." },
+          { turn_id: 3, role: "operator", author: "Алиса И.", time: "14:11:05", text: "Уточните, пожалуйста, последние 4 цифры вашего брокерского счета или ИИН для верификации доступа к торговому шлюзу." },
+          { turn_id: 4, role: "client", author: "Данияр С.", time: "14:11:30", text: "Счет заканчивается на 4820, ИИН 880415300123." },
+          { turn_id: 5, role: "system", author: "Система Tradernet", time: "14:11:32", text: "[Событие: Клиент успешно авторизован по SMS-коду двухфакторной аутентификации]" },
+          { turn_id: 6, role: "operator", author: "Алиса И.", time: "14:12:45", text: "Спасибо за ожидание! Проверила стакан KASE: в момент выставления заявки сработал ценовой коридор биржи (+/- 5% от цены закрытия вчера). Ваша лимитная цена 3 450 ₸ превышала лимит сессии." },
+          { turn_id: 7, role: "operator", author: "Алиса И.", time: "14:13:10", text: "Рекомендую скорректировать цену в приложении Tradernet до 3 320 ₸ или выставить рыночный ордер. Средства на счету не заблокированы, комиссия не списывалась." },
+          { turn_id: 8, role: "client", author: "Данияр С.", time: "14:13:58", text: "Понял, спасибо огромное! Поставил 3300 и сразу исполнилось. Отличного дня." },
+          { turn_id: 9, role: "operator", author: "Алиса И.", time: "14:14:15", text: "Рада помочь, Данияр! Если возникнут вопросы по дивидендам или выводу на карту Freedom Bank — обращайтесь в любое время. Успешных торгов!" }
+        ],
+        evaluation: {
+          checklistVersion: "v2.4",
+          totalScore: 92,
+          hasCriticalFlaw: false,
+          criteria: [
+            {
+              id: "crit_greeting",
+              title: "1. Приветствие и идентификация клиента",
+              weight: 15,
+              score: 15,
+              maxScore: 15,
+              status: "CORRECT",
+              explanation: "Оператор вежливо поприветствовала клиента, представилась именем, брендом Freedom Broker и корректно провела двухфакторную идентификацию счета.",
+              evidenceTurnIds: [2, 3]
+            },
+            {
+              id: "crit_fintech_knowledge",
+              title: "2. Компетентность и финансовая точность",
+              weight: 30,
+              score: 30,
+              maxScore: 30,
+              status: "CORRECT",
+              explanation: "Оператор абсолютно точно объяснила причину отклонения биржевого ордера ценовым коридором KASE и регламентом Kcell без ошибок в тарифах.",
+              evidenceTurnIds: [6, 7]
+            },
+            {
+              id: "crit_solution_speed",
+              title: "3. Полнота решения и альтернативы",
+              weight: 25,
+              score: 22,
+              maxScore: 25,
+              status: "WARNING",
+              explanation: "Проблема решена за 3 минуты. Снято 3 балла, так как оператор не уточнила тип торговой сессии (Т+2), однако дала верную рекомендацию по Tradernet.",
+              evidenceTurnIds: [7, 8]
+            },
+            {
+              id: "crit_politeness",
+              title: "4. Деловой стиль и этика",
+              weight: 15,
+              score: 15,
+              maxScore: 15,
+              status: "CORRECT",
+              explanation: "Корректная тональность, уважительное обращение по имени, грамотный русский язык без сленга.",
+              evidenceTurnIds: [2, 9]
+            },
+            {
+              id: "crit_cross_sell",
+              title: "5. Кросс-предложение сервисов Freedom",
+              weight: 10,
+              score: 10,
+              maxScore: 10,
+              status: "CORRECT",
+              explanation: "Уместное напоминание о связке с Freedom Bank для вывода средств на брокерскую карту.",
+              evidenceTurnIds: [9]
+            },
+            {
+              id: "crit_complaint_handling",
+              title: "6. Эскалация жалоб и рисков",
+              weight: 5,
+              score: 0,
+              maxScore: 0,
+              status: "NA",
+              explanation: "Условие N/A: Конфликтных ситуаций, претензий или требований компенсаций в диалоге не зафиксировано.",
+              naReason: "Не применимо к позитивному консультационному сценарию",
+              evidenceTurnIds: []
+            }
+          ]
+        }
+      },
+      {
+        id: "FRD-2025-0892",
+        lang: "KZ",
+        langTitle: "KZ • Қазақша",
+        channel: "Звонок",
+        channelTitle: "Телефония (Аудиозапись)",
+        operator: "Нұрсұлтан Қ. (Колл-центр)",
+        client: "Айнұр Б.",
+        status: "Готово",
+        score: 64,
+        criticalFlaw: true,
+        hasAudio: true,
+        turns: [
+          { turn_id: 1, role: "operator", author: "Нұрсұлтан Қ.", time: "11:02:10", text: "Сәлеметсіз бе, Freedom Broker. Тыңдап тұрмын." },
+          { turn_id: 2, role: "client", author: "Айнұр Б.", time: "11:02:22", text: "Сәлеметсіз бе. Менің шотымнан 5000 теңге ұсталып қалыпты, не үшін екенін айта аласыз ба?" },
+          { turn_id: 3, role: "operator", author: "Нұрсұлтан Қ.", time: "11:02:40", text: "Білмеймін, депозитарий шығар. Өзіңіз жаңа акция алдыңыз ба?" },
+          { turn_id: 4, role: "client", author: "Айнұр Б.", time: "11:03:00", text: "Жоқ, ештеңе алмадым. Түсіндіріп беріңізші, неге 'білмеймін' дейсіз?!" },
+          { turn_id: 5, role: "operator", author: "Нұрсұлтан Қ.", time: "11:03:30", text: "Жүйе істемей тұр, кейінірек хабарласыңыз." }
+        ],
+        evaluation: {
+          checklistVersion: "v2.4",
+          totalScore: 40,
+          hasCriticalFlaw: true,
+          criteria: [
+            {
+              id: "crit_greeting",
+              title: "1. Приветствие и идентификация клиента",
+              weight: 15,
+              score: 8,
+              maxScore: 15,
+              status: "WARNING",
+              explanation: "Оператор амандасты, бірақ есімін айтпады және клиентті идентификациялаудан өткізбеді.",
+              evidenceTurnIds: [1]
+            },
+            {
+              id: "crit_fintech_knowledge",
+              title: "2. Компетентность и финансовая точность",
+              weight: 30,
+              score: 5,
+              maxScore: 30,
+              status: "CRITICAL",
+              explanation: "ГРУБАЯ ОШИБКА: Оператор отказался проверять выписку, сослался на 'не знаю' и бросил звонок.",
+              evidenceTurnIds: [3, 5]
+            }
+          ]
+        }
+      },
+      {
+        id: "FRD-2025-0893",
+        lang: "EN",
+        langTitle: "EN • English",
+        channel: "Telegram",
+        channelTitle: "Telegram Bot Support",
+        operator: "Евгений В.",
+        client: "Michael Vance",
+        status: "Не оценён",
+        score: null,
+        criticalFlaw: false,
+        hasAudio: false,
+        turns: [
+          { turn_id: 1, role: "client", author: "Michael V.", time: "15:20:00", text: "Hi! How do I transfer W-8BEN form for US stock dividends tax reduction?" },
+          { turn_id: 2, role: "operator", author: "Евгений В.", time: "15:21:12", text: "Hello Michael! You can submit form W-8BEN directly in Tradernet web terminal under Cabinet -> Documents." }
+        ],
+        evaluation: null
+      }
+    ];
+
+    /**
+     * Чек-листы
+     */
+    let mockChecklistData = [
+      { id: "c1", key: "crit_greeting", title: "Приветствие и идентификация клиента", weight: 15, scale: "0-15 баллов", rule: "Оператор обязан представиться, назвать Freedom Broker и запросить ИИН/счет.", naCondition: "Никогда (обязательно)" },
+      { id: "c2", key: "crit_fintech_knowledge", title: "Компетентность и финансовая точность", weight: 30, scale: "0-30 баллов (Критический)", rule: "Точные термины KASE/AIX/Tradernet. Недопустимы искажения комиссий и правил биржи.", naCondition: "Никогда" },
+      { id: "c3", key: "crit_solution_speed", title: "Полнота решения и альтернативы", weight: 25, scale: "0-25 баллов", rule: "Проблема исчерпана, клиент подтвердил решение, даны инструктивные шаги.", naCondition: "Если диалог прерван клиентом" },
+      { id: "c4", key: "crit_politeness", title: "Деловой стиль и этика", weight: 15, scale: "0-15 баллов", rule: "Вежливость, грамотная речь на языке обращения (RU / KZ / EN).", naCondition: "Никогда" },
+      { id: "c5", key: "crit_cross_sell", title: "Кросс-предложение экосистемы Freedom", weight: 10, scale: "0-10 баллов", rule: "Упоминание карты инвестора, депозита или продуктов холдинга при уместности.", naCondition: "При жестком отказе или жалобе" },
+      { id: "c6", key: "crit_complaint_handling", title: "Эскалация жалоб и регуляторных рисков", weight: 5, scale: "0-5 баллов", rule: "При претензиях — перевод на старшего риск-менеджера по регламенту.", naCondition: "N/A если клиент не выражал претензий" }
+    ];
+
+    /**
+     * Апелляции
+     */
+    let mockAppealsData = [
+      {
+        id: "APP-4091",
+        dialogId: "FRD-2025-0891",
+        criterionTitle: "3. Полнота решения и альтернативы",
+        operator: "Алиса Ибраева",
+        initialScore: 22,
+        maxScore: 25,
+        proposedScore: 25,
+        operatorComment: "ИИ снял 3 балла за 'неуказание режима Т+2'. Но на KASE торги акциями Kcell проходят в стандартном режиме расчетов, и клиент спрашивал только про цену лимитного коридора. Проблема была закрыта на 100%.",
+        evidenceTurnId: 7,
+        status: "PENDING", // PENDING, APPROVED, REJECTED
+        date: "08.03.2025, 14:40"
+      }
+    ];
+
+    // Активный диалог
+    let currentActiveDialog = mockDialogsData[0];
+    let isEvaluatingInProgress = false;
+
+    /**
+     * =========================================================================
+     * UI ROUTING & NAVIGATION
+     * =========================================================================
+     */
+    function switchTab(tabId) {
+      const views = ['dialogs', 'dialog-card', 'checklists', 'appeals'];
+      views.forEach(v => {
+        const viewEl = document.getElementById(`view-${v}`);
+        const navEl = document.getElementById(`nav-${v}`);
+        if (viewEl) viewEl.classList.add('hidden');
+        if (navEl) {
+          navEl.classList.remove('bg-brand-600', 'text-white', 'font-semibold');
+          navEl.classList.add('text-charcoal-400');
+        }
+      });
+
+      const activeView = document.getElementById(`view-${tabId}`);
+      const activeNav = document.getElementById(`nav-${tabId}`);
+      if (activeView) activeView.classList.remove('hidden');
+      if (activeNav) {
+        activeNav.classList.remove('text-charcoal-400');
+        activeNav.classList.add('bg-brand-600', 'text-white', 'font-semibold');
+      }
+
+      if (tabId === 'dialogs') {
+        renderDialogsTable();
+      } else if (tabId === 'dialog-card') {
+        renderDialogCardView(currentActiveDialog);
+      } else if (tabId === 'checklists') {
+        renderChecklistEditor();
+      } else if (tabId === 'appeals') {
+        renderAppealsList();
+      }
+    }
+
+    /**
+     * =========================================================================
+     * SCREEN 1: РЕНДЕР ТАБЛИЦЫ ДИАЛОГОВ
+     * =========================================================================
+     */
+    function renderDialogsTable() {
+      const tbody = document.getElementById('dialogs-table-body');
+      const searchVal = (document.getElementById('filter-search')?.value || '').toLowerCase();
+      const langVal = document.getElementById('filter-lang')?.value || 'ALL';
+      const channelVal = document.getElementById('filter-channel')?.value || 'ALL';
+      const statusVal = document.getElementById('filter-status')?.value || 'ALL';
+
+      const filtered = mockDialogsData.filter(d => {
+        const matchesSearch = d.id.toLowerCase().includes(searchVal) ||
+                              d.operator.toLowerCase().includes(searchVal) ||
+                              d.client.toLowerCase().includes(searchVal);
+        const matchesLang = langVal === 'ALL' || d.lang === langVal;
+        const matchesChan = channelVal === 'ALL' || d.channel === channelVal;
+        const matchesStat = statusVal === 'ALL' || d.status === statusVal;
+        return matchesSearch && matchesLang && matchesChan && matchesStat;
+      });
+
+      tbody.innerHTML = filtered.map(d => {
+        let statusBadgeClass = "bg-emerald-100 text-emerald-800 border-emerald-300";
+        if (d.status === "Оценивается") statusBadgeClass = "bg-blue-100 text-blue-800 border-blue-300 animate-pulse";
+        if (d.status === "В очереди") statusBadgeClass = "bg-slate-100 text-slate-700 border-slate-300";
+        if (d.status === "Не оценён") statusBadgeClass = "bg-slate-100 text-slate-600 border-slate-200";
+        if (d.status === "Ошибка") statusBadgeClass = "bg-red-100 text-red-800 border-red-300";
+
+        let scoreBadge = d.score == null ? "—" : `<span class="font-mono font-bold text-charcoal-900 whitespace-nowrap">${d.score} / 100</span>`;
+        if (d.status === 'Оценивается') scoreBadge = `<span class="text-xs text-blue-600 font-mono">Анализ...</span>`;
+        if (d.criticalFlaw) scoreBadge += `<span class="block mt-1 text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded font-bold">Грубое нарушение</span>`;
+
+        return `
+          <tr class="hover:bg-brand-50/40 transition cursor-pointer" onclick="openDialogCard('${d.id}')">
+            <td class="py-3.5 px-4 font-mono font-bold text-brand-700 text-xs">${d.id}</td>
+            <td class="py-3.5 px-3">
+              <span class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-slate-100 text-slate-700">${d.lang}</span>
+            </td>
+            <td class="py-3.5 px-3 text-xs text-charcoal-600">${d.channel}</td>
+            <td class="py-3.5 px-4">
+              <div class="text-xs font-semibold text-charcoal-900">${d.operator}</div>
+              <div class="text-[11px] text-charcoal-400">Клиент: ${d.client}</div>
+            </td>
+            <td class="py-3.5 px-3">
+              <span class="px-2.5 py-1 rounded-md text-xs font-medium border ${statusBadgeClass}">${d.status}</span>
+            </td>
+            <td class="py-3.5 px-4 text-center">${scoreBadge}</td>
+            <td class="py-3.5 px-4 text-right">
+              <button onclick="event.stopPropagation(); openDialogCard('${d.id}')" class="text-xs bg-slate-100 hover:bg-brand-500 hover:text-white px-3 py-1.5 rounded-lg text-charcoal-700 font-medium transition">
+                Открыть
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function applyFilters() {
+      renderDialogsTable();
+    }
+
+    function openDialogCard(id) {
+      const found = mockDialogsData.find(d => d.id === id);
+      if (found) {
+        currentActiveDialog = found;
+        switchTab('dialog-card');
+      }
+    }
+
+    /**
+     * =========================================================================
+     * SCREEN 2: РЕНДЕР КАРТОЧКИ ДИАЛОГА (Главный интерактивный экран)
+     * =========================================================================
+     */
+    function renderDialogCardView(dialog) {
+      if (!dialog) return;
+
+      // Meta values
+      document.getElementById('card-dialog-id').textContent = dialog.id;
+      document.getElementById('card-lang-badge').textContent = dialog.langTitle;
+      document.getElementById('card-channel-badge').innerHTML = `
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        ${dialog.channelTitle}
+      `;
+      document.getElementById('card-status-badge').textContent = dialog.status;
+
+      // Audio bar visibility
+      const audioContainer = document.getElementById('audio-player-container');
+      if (dialog.hasAudio) {
+        audioContainer.classList.remove('hidden');
+      } else {
+        audioContainer.classList.add('hidden');
+      }
+
+      // Render turns
+      document.getElementById('turns-count-badge').textContent = `${dialog.turns.length} реплик`;
+      const feed = document.getElementById('transcript-feed');
+      feed.innerHTML = dialog.turns.map(turn => {
+        let roleBadge = "";
+        let borderClass = "border-surface-border";
+        let bgClass = "bg-white";
+
+        if (turn.role === 'client') {
+          roleBadge = `<span class="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.2 rounded text-[10px]">Клиент</span>`;
+          bgClass = "bg-[#FAFBF9]";
+        } else if (turn.role === 'operator') {
+          roleBadge = `<span class="bg-brand-100 text-brand-900 border border-brand-300 font-bold px-1.5 py-0.2 rounded text-[10px]">Оператор Freedom</span>`;
+          bgClass = "bg-white border-l-4 border-l-brand-500";
+        } else if (turn.role === 'system') {
+          roleBadge = `<span class="bg-slate-200 text-slate-700 font-mono px-1.5 py-0.2 rounded text-[10px]">Система</span>`;
+          bgClass = "bg-slate-50 border-dashed";
+        }
+
+        return `
+          <div id="transcript-turn-${turn.turn_id}" class="transcript-turn p-3.5 rounded-xl border ${borderClass} ${bgClass} transition duration-200 text-xs">
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-charcoal-400 font-semibold text-[11px]">#${turn.turn_id}</span>
+                ${roleBadge}
+                <span class="font-bold text-charcoal-900 text-xs">${turn.author}</span>
+              </div>
+              <span class="font-mono text-charcoal-400 text-[10px]">${turn.time}</span>
+            </div>
+            <p class="text-charcoal-800 leading-relaxed text-xs pl-5">${escapeHtml(turn.text)}</p>
+          </div>
+        `;
+      }).join('');
+
+      // Render Evaluation
+      const evalBox = dialog.evaluation;
+      if (evalBox) {
+        document.getElementById('score-number').textContent = evalBox.totalScore;
+        document.getElementById('score-bar').style.width = `${evalBox.totalScore}%`;
+
+        // Critical flaw badge
+        const critBox = document.getElementById('critical-flaw-box');
+        const critText = document.getElementById('critical-flaw-text');
+        if (evalBox.hasCriticalFlaw) {
+          critBox.className = "px-3.5 py-2 rounded-xl bg-red-50 border border-red-200 text-red-800 flex items-center gap-2";
+          critBox.innerHTML = `
+            <svg class="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <div>
+              <div class="text-[11px] font-bold uppercase text-red-700">Грубая ошибка</div>
+              <div class="text-xs font-semibold text-red-900">Обнаружено нарушение</div>
+            </div>
+          `;
+        } else {
+          critBox.className = "px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center gap-2";
+          critBox.innerHTML = `
+            <svg class="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <div>
+              <div class="text-[11px] font-bold uppercase">Грубые ошибки</div>
+              <div class="text-xs font-medium">Не обнаружено (Чисто)</div>
+            </div>
+          `;
+        }
+
+        renderCriteriaList(evalBox.criteria);
+      } else {
+        document.getElementById('score-number').textContent = "--";
+        document.getElementById('score-bar').style.width = '0%';
+        document.getElementById('criteria-container').innerHTML = `
+          <div class="p-8 text-center bg-white rounded-2xl border border-surface-border text-charcoal-400">
+            <svg class="w-8 h-8 mx-auto text-charcoal-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            <p class="text-sm font-semibold text-charcoal-600">Диалог еще не оценен ИИ</p>
+            <p class="text-xs mt-1">Для оценки нажмите «Оценить». В демо для этого диалога нет готового результата.</p>
+          </div>
+        `;
+      }
+    }
+
+    /**
+     * Рендер критериев ИИ с кнопками доказательств и апелляций
+     */
+    function renderCriteriaList(criteria) {
+      const container = document.getElementById('criteria-container');
+      if (!criteria || !criteria.length) {
+        container.innerHTML = '<p class="text-xs text-charcoal-400">Критерии не загружены</p>';
+        return;
+      }
+
+      container.innerHTML = criteria.map(crit => {
+        let badge = "";
+        let borderAccent = "border-surface-border";
+
+        if (crit.status === "CORRECT") {
+          badge = `<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[11px]">Выполнено (${crit.score}/${crit.maxScore})</span>`;
+          borderAccent = "border-l-4 border-l-emerald-500";
+        } else if (crit.status === "WARNING") {
+          badge = `<span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[11px]">Частично (${crit.score}/${crit.maxScore})</span>`;
+          borderAccent = "border-l-4 border-l-amber-500";
+        } else if (crit.status === "CRITICAL") {
+          badge = `<span class="px-2 py-0.5 rounded bg-red-100 text-red-900 font-bold text-[11px]">Нарушение (${crit.score}/${crit.maxScore})</span>`;
+          borderAccent = "border-l-4 border-l-red-500";
+        } else if (crit.status === "NA") {
+          badge = `<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold text-[11px]">N/A (Не применимо)</span>`;
+        }
+
+        // Render Evidence tags
+        let evidenceTags = "";
+        if (crit.evidenceTurnIds && crit.evidenceTurnIds.length > 0) {
+          evidenceTags = crit.evidenceTurnIds.map(tid => `
+            <button onclick="highlightAndScrollToTurn(${tid})" class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-brand-50 hover:bg-brand-500 hover:text-white text-brand-800 border border-brand-200 transition text-[11px] font-mono font-semibold">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              Реплика №${tid}
+            </button>
+          `).join(' ');
+        } else if (crit.status === 'NA') {
+          evidenceTags = `<span class="text-[11px] text-charcoal-400 italic">Причина N/A: ${crit.naReason || 'Сценарий не наступил'}</span>`;
+        } else {
+          evidenceTags = `<span class="text-[11px] text-charcoal-400 italic">Реплика не указана</span>`;
+        }
+
+        return `
+          <div class="bg-white rounded-xl border ${borderAccent} p-4 shadow-sm hover:shadow-md transition">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h5 class="font-bold text-sm text-charcoal-900">${crit.title}</h5>
+                <span class="text-[11px] text-charcoal-400 font-mono">Базовый вес: ${crit.weight}%</span>
+              </div>
+              <div>${badge}</div>
+            </div>
+
+            <!-- Explanation -->
+            <p class="text-xs text-charcoal-700 mt-2 bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
+              ${escapeHtml(crit.explanation)}
+            </p>
+
+            <!-- Bottom: Evidence buttons & Dispute Button -->
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-100">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-[11px] text-charcoal-400 font-medium mr-1">Доказательства:</span>
+                ${evidenceTags}
+              </div>
+
+              ${crit.status !== 'NA' ? `
+                <button onclick="openDisputeModal('${crit.id}', '${escapeHtml(crit.title)}', ${crit.score}, ${crit.maxScore}, '${crit.evidenceTurnIds ? crit.evidenceTurnIds[0] : ''}')" class="text-[11px] font-semibold text-charcoal-500 hover:text-amber-700 hover:bg-amber-50 px-2 py-1 rounded transition border border-transparent hover:border-amber-200">
+                  ⚖ Оспорить оценку
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /**
+     * Скролл и подсветка нужной реплики в транскрипте
+     */
+    function highlightAndScrollToTurn(turnId) {
+      // Remove existing highlights
+      document.querySelectorAll('.transcript-turn').forEach(el => {
+        el.classList.remove('active-highlight');
+      });
+
+      const targetEl = document.getElementById(`transcript-turn-${turnId}`);
+      if (targetEl) {
+        targetEl.classList.add('active-highlight');
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Show toast
+        showToast(`Фокус на реплике #${turnId} в транскрипте`);
+      }
+    }
+
+    /**
+     * =========================================================================
+     * ПРОЦЕСС ОЦЕНКИ ИИ (Кнопка «Оценить диалог»)
+     * =========================================================================
+     */
+    function startEvaluationProcess() {
+      showToast('Для новой оценки подключите FastAPI в настройках.');
+    }
+
+    /**
+     * =========================================================================
+     * SCREEN 3: РЕДАКТОР ЧЕК-ЛИСТОВ
+     * =========================================================================
+     */
+    function renderChecklistEditor() {
+      const container = document.getElementById('checklist-editor-list');
+      container.innerHTML = mockChecklistData.map((item, idx) => `
+        <div class="p-5 hover:bg-slate-50/50 transition">
+          <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div class="flex-1 space-y-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-mono font-bold text-brand-600 bg-brand-50 px-2 py-0.5 rounded">${item.key}</span>
+                <input type="text" value="${escapeHtml(item.title)}" onchange="updateCriterionTitle(${idx}, this.value)" class="text-sm font-bold text-charcoal-900 bg-transparent border-b border-dashed border-charcoal-300 focus:outline-none focus:border-brand-500 w-2/3">
+              </div>
+
+              <div>
+                <label class="text-[11px] text-charcoal-400 font-semibold uppercase">Правило валидации:</label>
+                <textarea rows="2" onchange="updateCriterionRule(${idx}, this.value)" class="w-full text-xs text-charcoal-700 bg-white border border-surface-border p-2 rounded-lg mt-0.5 focus:outline-none focus:border-brand-500">${escapeHtml(item.rule)}</textarea>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-4 text-xs pt-1">
+                <div>
+                  <span class="text-charcoal-400">Шкала оценивания:</span>
+                  <span class="font-mono font-semibold text-charcoal-800 ml-1">${item.scale}</span>
+                </div>
+                <div>
+                  <span class="text-charcoal-400">Условие N/A:</span>
+                  <span class="italic text-charcoal-600 ml-1">${item.naCondition}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Weight input -->
+            <div class="flex md:flex-col items-center md:items-end justify-between gap-2">
+              <div class="text-right">
+                <span class="text-[11px] text-charcoal-400 font-semibold block">Вес в итоге:</span>
+                <div class="flex items-center gap-1 mt-0.5">
+                  <input type="number" value="${item.weight}" min="1" max="100" onchange="updateCriterionWeight(${idx}, this.value)" class="w-14 text-center font-mono font-bold text-sm bg-white border border-surface-border rounded-lg py-1 focus:outline-none focus:border-brand-500">
+                  <span class="font-bold text-charcoal-700">%</span>
+                </div>
+              </div>
+              <button onclick="removeCriterion(${idx})" class="text-[11px] text-red-600 hover:text-red-800 font-medium px-2 py-1 rounded">Удалить</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updateCriterionTitle(index, val) {
+      mockChecklistData[index].title = val;
+      showToast(`Критерий #${index+1} обновлен`);
+    }
+
+    function updateCriterionRule(index, val) {
+      mockChecklistData[index].rule = val;
+      showToast(`Правило критерия #${index+1} обновлено`);
+    }
+
+    function updateCriterionWeight(index, val) {
+      mockChecklistData[index].weight = parseInt(val) || 0;
+      showToast(`Вес критерия #${index+1} изменен на ${val}%`);
+    }
+
+    function removeCriterion(index) {
+      if (confirm("Удалить данный критерий из чек-листа?")) {
+        mockChecklistData.splice(index, 1);
+        renderChecklistEditor();
+        showToast("Критерий удален");
+      }
+    }
+
+    function openNewCriterionModal() {
+      const newTitle = prompt("Введите название нового критерия (например: Проверка согласия на обработку биометрии):");
+      if (newTitle) {
+        mockChecklistData.push({
+          id: "c" + (mockChecklistData.length + 1),
+          key: "crit_custom_" + Date.now().toString().slice(-4),
+          title: newTitle,
+          weight: 10,
+          scale: "0-10 баллов",
+          rule: "Проверить корректность информирования клиента.",
+          naCondition: "Если клиент отказался от услуги"
+        });
+        renderChecklistEditor();
+        showToast("Новый критерий добавлен в чек-лист");
+      }
+    }
+
+    function saveChecklistNewVersion() {
+      // Add version to select
+      const select = document.getElementById('select-checklist-ver');
+      const newOpt = document.createElement('option');
+      newOpt.value = "v2.5";
+      newOpt.textContent = "Freedom QA Core v2.5 (Новая сохраненная)";
+      newOpt.selected = true;
+      select.appendChild(newOpt);
+
+      showToast(" Регламент сохранен как версия v2.5. Теперь её можно выбрать при следующей оценке!");
+      switchTab('dialog-card');
+    }
+
+    /**
+     * =========================================================================
+     * SCREEN 4: АРБИТРАЖ И АПЕЛЛЯЦИИ
+     * =========================================================================
+     */
+    function renderAppealsList() {
+      const container = document.getElementById('appeals-list-container');
+      const counterEl = document.getElementById('appeals-counter');
+      const pendingCount = mockAppealsData.filter(a => a.status === 'PENDING').length;
+      if (counterEl) counterEl.textContent = pendingCount;
+
+      if (!mockAppealsData.length) {
+        container.innerHTML = '<div class="p-8 text-center bg-white rounded-2xl border border-surface-border text-charcoal-400">Нет активных апелляций</div>';
+        return;
+      }
+
+      container.innerHTML = mockAppealsData.map(app => {
+        let statusBadge = "";
+        if (app.status === 'PENDING') statusBadge = '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">На рассмотрении</span>';
+        if (app.status === 'APPROVED') statusBadge = '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">Оценка пересмотрена (+3 балла)</span>';
+        if (app.status === 'REJECTED') statusBadge = '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">Исходная оценка подтверждена</span>';
+
+        return `
+          <div class="bg-white rounded-2xl border border-surface-border p-5 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-surface-border">
+              <div class="flex items-center gap-2">
+                <span class="font-mono font-bold text-sm text-charcoal-900">${app.id}</span>
+                <span class="text-xs text-charcoal-400">• Диалог ${app.dialogId}</span>
+                <span class="text-xs text-charcoal-400 font-mono">(${app.date})</span>
+              </div>
+              <div>${statusBadge}</div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+              <div class="space-y-2">
+                <div>
+                  <span class="text-charcoal-400">Спорный критерий:</span>
+                  <p class="font-bold text-charcoal-900 text-sm mt-0.5">${app.criterionTitle}</p>
+                </div>
+                <div class="flex items-center gap-4">
+                  <div>
+                    <span class="text-charcoal-400">Балл ИИ:</span>
+                    <span class="font-mono font-bold text-red-600 block">${app.initialScore} / ${app.maxScore}</span>
+                  </div>
+                  <div>
+                    <span class="text-charcoal-400">Запрос оператора:</span>
+                    <span class="font-mono font-bold text-emerald-700 block">${app.proposedScore} / ${app.maxScore}</span>
+                  </div>
+                </div>
+                <div>
+                  <span class="text-charcoal-400">Связанная реплика:</span>
+                  <button onclick="openDialogCard('${app.dialogId}'); setTimeout(() => highlightAndScrollToTurn(${app.evidenceTurnId}), 300)" class="text-brand-600 underline font-semibold ml-1">
+                    Реплика #${app.evidenceTurnId}
+                  </button>
+                </div>
+              </div>
+
+              <div class="bg-[#F8FAF9] p-3 rounded-xl border border-surface-border">
+                <span class="text-charcoal-400 font-semibold block text-[11px] mb-1">Комментарий заявителя (${app.operator}):</span>
+                <p class="text-charcoal-800 leading-relaxed italic text-xs">${escapeHtml(app.operatorComment)}</p>
+              </div>
+            </div>
+
+            ${app.status === 'PENDING' ? `
+              <div class="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-surface-border">
+                <button onclick="decideAppeal('${app.id}', 'confirm')" class="px-4 py-2 rounded-xl text-xs font-semibold text-charcoal-700 bg-slate-100 hover:bg-slate-200 transition">
+                  Подтвердить оценку ИИ (${app.initialScore} б.)
+                </button>
+                <button onclick="decideAppeal('${app.id}', 'update')" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 transition shadow-sm">
+                  Изменить оценку на ${app.proposedScore} баллов
+                </button>
+              </div>
+            ` : `
+              <div class="pt-2 border-t border-surface-border text-xs flex justify-between text-charcoal-500">
+                <span>Арбитражное решение принято.</span>
+                <span class="font-mono font-bold text-charcoal-900">Итог диалога: 95 / 100</span>
+              </div>
+            `}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function decideAppeal(appealId, action) {
+      const appeal = mockAppealsData.find(a => a.id === appealId);
+      if (!appeal) return;
+
+      if (action === 'confirm') {
+        appeal.status = 'REJECTED';
+        showToast("Оценка ИИ подтверждена арбитром без изменений.");
+      } else {
+        const reason = prompt("Укажите причину изменения оценки супервайзером:", "Запрос на покупку Kcell рассмотрен в полном объеме, Т+2 не влияет на результат.");
+        if (!reason) return;
+        appeal.status = 'APPROVED';
+
+        // Update score in active dialog
+        if (currentActiveDialog.id === appeal.dialogId && currentActiveDialog.evaluation) {
+          currentActiveDialog.evaluation.totalScore = 95;
+          const crit = currentActiveDialog.evaluation.criteria.find(c => c.id === 'crit_solution_speed');
+          if (crit) {
+            crit.score = 25;
+            crit.status = "CORRECT";
+          }
+        }
+        showToast(" Оценка повышена до 25/25. Итоговый балл пересчитан: 95/100!");
+      }
+
+      await window.FreedomAPI.submitAppealDecision(appealId, action, appeal.proposedScore, "Арбитражное решение супервайзера");
+      renderAppealsList();
+    }
+
+    /**
+     * =========================================================================
+     * MODAL: ОСПОРИТЬ ОЦЕНКУ
+     * =========================================================================
+     */
+    let activeDisputeCriterionId = null;
+
+    function openDisputeModal(criterionId, title, currentScore, maxScore, turnRef) {
+      activeDisputeCriterionId = criterionId;
+      document.getElementById('modal-dispute-criterion-title').textContent = title;
+      document.getElementById('modal-dispute-current-score').textContent = `${currentScore} / ${maxScore}`;
+      document.getElementById('modal-dispute-turn-ref').textContent = turnRef ? `Реплика №${turnRef}` : "Без реплики";
+      document.getElementById('modal-dispute-proposed-score').value = maxScore;
+      document.getElementById('modal-dispute-proposed-score').max = maxScore;
+      document.getElementById('modal-dispute-comment').value = "";
+      document.getElementById('modal-dispute').classList.remove('hidden');
+    }
+
+    function closeDisputeModal() {
+      document.getElementById('modal-dispute').classList.add('hidden');
+    }
+
+    async function submitDisputeAppeal() {
+      const comment = document.getElementById('modal-dispute-comment').value.trim();
+      const proposedScore = parseInt(document.getElementById('modal-dispute-proposed-score').value) || 0;
+
+      if (!comment) {
+        alert("Пожалуйста, опишите причину несогласия с оценкой ИИ.");
+        return;
+      }
+
+      const newApp = {
+        id: "APP-" + Math.floor(1000 + Math.random() * 9000),
+        dialogId: currentActiveDialog.id,
+        criterionTitle: document.getElementById('modal-dispute-criterion-title').textContent,
+        operator: currentActiveDialog.operator,
+        initialScore: parseInt(document.getElementById('modal-dispute-current-score').textContent),
+        maxScore: parseInt(document.getElementById('modal-dispute-proposed-score').max),
+        proposedScore: proposedScore,
+        operatorComment: comment,
+        evidenceTurnId: 3,
+        status: "PENDING",
+        date: "Только что"
+      };
+
+      mockAppealsData.unshift(newApp);
+      closeDisputeModal();
+      showToast(" Апелляция зарегистрирована! Вы можете проверить ее во вкладке «Апелляции».");
+      
+      const counterEl = document.getElementById('appeals-counter');
+      if (counterEl) counterEl.textContent = mockAppealsData.filter(a => a.status === 'PENDING').length;
+    }
+
+    /**
+     * =========================================================================
+     * MODAL: НАСТРОЙКИ FASTAPI
+     * =========================================================================
+     */
+    function toggleApiModal() {
+      const modal = document.getElementById('modal-api-settings');
+      modal.classList.toggle('hidden');
+    }
+
+    function toggleApiMode(mode) {
+      const isLive = (mode === 'live');
+      document.getElementById('demo-score-note').classList.toggle('hidden', isLive);
+      window.FreedomAPI.setLiveMode(isLive);
+      const badge = document.getElementById('api-mode-badge');
+      if (isLive) {
+        badge.textContent = "Режим: FASTAPI (Live)";
+        badge.className = "px-2 py-0.5 rounded-full bg-emerald-700 text-white font-mono text-[10px]";
+        showToast("Включен режим прямого обращения к FastAPI серверу!");
+      } else {
+        badge.textContent = "Демо · Пример оценок";
+        badge.className = "px-2 py-0.5 rounded-full bg-brand-800/80 text-brand-200 border border-brand-700/60 font-mono text-[10px]";
+        showToast("Возврат к синтетическим демонстрационным данным.");
+      }
+    }
+
+    function triggerNewBatchEvaluation() {
+      showToast("Запущена пакетная проверка всех 3-х диалогов из реестра...");
+      setTimeout(() => {
+        showToast(" Пакетная валидация выполнена! Средний балл обновлен.");
+      }, 1500);
+    }
+
+    /**
+     * TOAST HELPER
+     */
+    function showToast(msg) {
+      const banner = document.getElementById('toast-banner');
+      const text = document.getElementById('toast-text');
+      if (banner && text) {
+        text.textContent = msg;
+        banner.classList.remove('hidden');
+        clearTimeout(window._toastTimeout);
+        window._toastTimeout = setTimeout(() => {
+          banner.classList.add('hidden');
+        }, 4500);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // INIT ON LOAD: Открываем сразу карточку синтетического диалога
+    window.addEventListener('DOMContentLoaded', () => {
+      switchTab('dialogs');
+    });
+  </script>
+<script src="config.js"></script><script src="live.js"></script></body>
+</html>
