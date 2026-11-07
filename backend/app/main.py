@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from fastapi import BackgroundTasks
 from app.schemas.evaluation import AIEvaluationRequest
 from app.services.evaluation_service import process_ai_evaluation
@@ -16,13 +17,16 @@ from app.services.conversation_service import (
     import_dataset,
     get_active_dataset
 )
-from app.database.database import Base, engine, get_db
+from app.database.database import Base, engine, get_db, SessionLocal
 from app.models.checklist import Checklist, Criterion
 from app.models.evaluation import Evaluation, CriterionResult
 from app.models.appeal import Appeal
 from app.schemas.appeal import AppealCreate, AppealReview
 from app.schemas.checklist import ChecklistCreate
 from datetime import datetime, timezone
+from app.services.checklist_seed import ensure_default_checklist
+from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 
 
 # Create database tables
@@ -38,6 +42,9 @@ if 'original_answer' not in {column['name'] for column in inspect(engine).get_co
 for index in Evaluation.__table__.indexes:
     if index.name == "uq_active_evaluation":
         index.create(bind=engine, checkfirst=True)
+
+with SessionLocal() as initial_session:
+    ensure_default_checklist(initial_session)
 
 app = FastAPI(
     title="CQA Backend",
@@ -776,3 +783,14 @@ def review_appeal(
         "new_score": evaluation.score,
         "gross_violation": evaluation.gross_violation
     }
+
+
+@app.get('/config.js', include_in_schema=False)
+def same_origin_frontend_config():
+    return Response('window.FREEDOM_API_URL = window.location.origin;', media_type='application/javascript')
+
+
+# Keep API routes above this mount: the same web service can serve the UI and API.
+frontend = Path(__file__).resolve().parents[2] / 'frontend'
+if frontend.is_dir():
+    app.mount('/', StaticFiles(directory=frontend, html=True), name='frontend')

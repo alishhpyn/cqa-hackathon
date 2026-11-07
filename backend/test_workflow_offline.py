@@ -17,6 +17,7 @@ from app.database.database import Base, get_db
 from app.services.ai.checklist_rules import OFFICIAL_CHECKLIST
 from app.services.ai.evaluator_core import evaluate_dialog
 from app.services import conversation_service
+from app.services.checklist_seed import ensure_default_checklist
 
 
 class WorkflowTests(unittest.TestCase):
@@ -45,6 +46,20 @@ class WorkflowTests(unittest.TestCase):
                 'answer_type': 'numeric' if 'scale' in kind else ('yes_no_na' if rule['allows_na'] else 'yes_no'),
                 'na_allowed': rule['allows_na'], 'scale': rule.get('scale')})
         return {'name': 'Test checklist', 'channel': 'both', 'language': 'ALL', 'criteria': criteria}
+
+    def test_default_checklist_and_frontend(self):
+        with self.sessions() as db:
+            first = ensure_default_checklist(db)
+            second = ensure_default_checklist(db)
+            self.assertEqual(first.id, second.id)
+            self.assertEqual(len(first.criteria), 8)
+        page = self.client.get('/')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('Freedom Dialog', page.text)
+        config = self.client.get('/config.js')
+        self.assertEqual(config.status_code, 200)
+        self.assertIn('window.location.origin', config.text)
+        self.assertEqual(self.client.get('/api/health').json(), {'status': 'OK'})
 
     def test_import_and_navigation_from_provided_dev_data(self):
         response = self.client.get('/api/conversations')
