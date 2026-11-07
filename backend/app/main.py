@@ -680,6 +680,16 @@ def review_appeal(
         if saved_item:
             answer = saved_item.answer
 
+            if isinstance(answer, str):
+                normalized = answer.strip().casefold()
+
+                if normalized in ("да", "yes"):
+                    answer = "YES"
+                elif normalized in ("нет", "no"):
+                    answer = "NO"
+                elif normalized in ("н/д", "n/a", "na"):
+                    answer = "N/A"
+
             if criterion["answer_type"] == "numeric":
                 try:
                     answer = float(answer)

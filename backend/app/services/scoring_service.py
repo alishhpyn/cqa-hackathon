@@ -93,7 +93,7 @@ def calculate_score(criteria, answers):
     "criterion": criterion["name"],
     "answer": answer,
     "weight": weight,
-    "points": round(final_points, 2)
+    "points": round(raw_points, 2)
 })
 
     return {
