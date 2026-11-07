@@ -89,11 +89,12 @@ def calculate_score(criteria, answers):
         total_score += final_points
 
         details.append({
-            "criterion": criterion["name"],
-            "answer": answer,
-            "weight": weight,
-            "points": round(final_points, 2)
-        })
+    "criterion_id": criterion["id"],
+    "criterion": criterion["name"],
+    "answer": answer,
+    "weight": weight,
+    "points": round(final_points, 2)
+})
 
     return {
         "score": round(total_score, 2),

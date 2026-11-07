@@ -12,6 +12,7 @@ from app.services.conversation_service import (
 
 from app.database.database import Base, engine, get_db
 from app.models.checklist import Checklist, Criterion
+from app.models.evaluation import Evaluation, CriterionResult
 from app.schemas.checklist import ChecklistCreate
 
 
@@ -180,6 +181,7 @@ def update_checklist(
 
 
 
+
 @app.post("/api/evaluate/{conversation_id}")
 def evaluate_conversation(
     conversation_id: str,
@@ -219,14 +221,98 @@ def evaluate_conversation(
     try:
         result = calculate_score(criteria, request.answers)
 
-    except ValueError as error:
-        raise HTTPException(
-            status_code=400,
-            detail=str(error)
+        # Save general evaluation
+        evaluation = Evaluation(
+            conversation_id=conversation_id,
+            checklist_id=checklist.id,
+            score=result["score"],
+            gross_violation=result["gross_violation"]
         )
 
+        db.add(evaluation)
+        db.flush()
+
+        # Save individual criterion results
+        for item in result["details"]:
+            criterion_result = CriterionResult(
+                evaluation_id=evaluation.id,
+                criterion_id=item["criterion_id"],
+                criterion_name=item["criterion"],
+                answer=str(item["answer"]),
+                weight=item["weight"],
+                points=item["points"]
+            )
+
+            db.add(criterion_result)
+
+        db.commit()
+        db.refresh(evaluation)
+
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(error))
+
+    except Exception:
+        db.rollback()
+        raise
+
     return {
+        "evaluation_id": evaluation.id,
         "conversation_id": conversation_id,
         "checklist_id": checklist.id,
         **result
+    }
+
+
+@app.get("/api/results/{conversation_id}")
+def get_evaluation_results(
+    conversation_id: str,
+    db: Session = Depends(get_db)
+):
+    evaluations = (
+        db.query(Evaluation)
+        .filter(Evaluation.conversation_id == conversation_id)
+        .order_by(Evaluation.id.desc())
+        .all()
+    )
+
+    if not evaluations:
+        raise HTTPException(
+            status_code=404,
+            detail="No evaluation results found"
+        )
+
+    results = []
+
+    for evaluation in evaluations:
+        criterion_results = (
+            db.query(CriterionResult)
+            .filter(
+                CriterionResult.evaluation_id == evaluation.id
+            )
+            .all()
+        )
+
+        results.append({
+            "evaluation_id": evaluation.id,
+            "conversation_id": evaluation.conversation_id,
+            "checklist_id": evaluation.checklist_id,
+            "score": evaluation.score,
+            "gross_violation": evaluation.gross_violation,
+            "created_at": evaluation.created_at,
+            "details": [
+                {
+                    "criterion_id": item.criterion_id,
+                    "criterion": item.criterion_name,
+                    "answer": item.answer,
+                    "weight": item.weight,
+                    "points": item.points
+                }
+                for item in criterion_results
+            ]
+        })
+
+    return {
+        "total": len(results),
+        "results": results
     }
