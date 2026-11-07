@@ -239,7 +239,14 @@
     try {
       const {appeals}=await api('/appeals');
       if (!live) return;
-      $('appeals-counter').textContent=appeals.filter(x=>x.status==='pending').length;
+
+      const pendingCount = appeals.filter(
+        x => x.status === 'pending'
+      ).length;
+
+      $('appeals-counter').textContent = pendingCount;
+      $('appeals-pending-count').textContent =
+        `${pendingCount} на рассмотрении`;
       $('appeals-list-container').innerHTML=appeals.map(x=>`<article class="bg-white border rounded-xl p-4 space-y-2">
         <strong>${safe(x.criterion)}</strong> · ${safe(x.status)}
         <p class="text-sm">${safe(x.comment)}</p><p class="text-xs">Ответ: ${safe(x.original_answer)}</p>

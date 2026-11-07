@@ -11,9 +11,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app.services.conversation_service import (
     get_all_conversations,
-    get_conversation_by_id
+    get_conversation_by_id,
+    import_dataset,
+    get_active_dataset
 )
-
 from app.database.database import Base, engine, get_db
 from app.models.checklist import Checklist, Criterion
 from app.models.evaluation import Evaluation, CriterionResult
@@ -58,15 +59,52 @@ def health_check():
 # -------------------------
 # Conversations
 # -------------------------
+from pydantic import BaseModel, Field
+
+
+class DatasetImportRequest(BaseModel):
+    group_id: str = Field(..., min_length=1)
+
+
+@app.post("/api/imports")
+def import_dataset_endpoint(request: DatasetImportRequest):
+    group_id = request.group_id.strip().upper()
+
+    if group_id not in ("DEV", "PROD"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid group_id. Use DEV or PROD."
+        )
+
+    try:
+        result = import_dataset(group_id)
+
+        return {
+            "success": True,
+            "message": f"{group_id} dataset imported successfully",
+            "group_id": result["group_id"],
+            "total": result["total"]
+        }
+
+    except (RuntimeError, ValueError, FileNotFoundError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc)
+        )
 
 @app.get("/api/conversations")
 def list_conversations():
-    conversations = get_all_conversations()
+    try:
+        conversations = get_all_conversations()
 
-    return {
-        "total": len(conversations),
-        "conversations": conversations
-    }
+        return {
+            "total": len(conversations),
+            "active_dataset": get_active_dataset().upper(),
+            "conversations": conversations
+        }
+
+    except (RuntimeError, ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 # -------------------------
 # AI Evaluations
