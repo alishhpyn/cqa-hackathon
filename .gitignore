@@ -17,3 +17,6 @@ data/
 
 # Archives
 *.zip
+# Local organizer API responses
+organizer_dev_test.json
+
