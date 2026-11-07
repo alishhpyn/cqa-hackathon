@@ -11,3 +11,9 @@ __pycache__/
 
 # Database
 *.db
+
+# Local development data
+data/
+
+# Archives
+*.zip

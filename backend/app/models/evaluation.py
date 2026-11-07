@@ -6,7 +6,8 @@ from sqlalchemy import (
     Float,
     Boolean,
     ForeignKey,
-    DateTime
+    DateTime,
+    Text
 )
 from sqlalchemy.sql import func
 
@@ -19,6 +20,7 @@ class Evaluation(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     conversation_id = Column(String, nullable=False)
+
     checklist_id = Column(
         Integer,
         ForeignKey("checklists.id"),
@@ -27,6 +29,12 @@ class Evaluation(Base):
 
     score = Column(Float, nullable=True)
     gross_violation = Column(Boolean, default=False)
+
+    # AI evaluation fields
+    status = Column(String, nullable=False, default="completed")
+    checklist_version = Column(String, nullable=True)
+    result_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

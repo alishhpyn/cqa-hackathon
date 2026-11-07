@@ -14,3 +14,12 @@ class EvaluationResponse(BaseModel):
     score: float | None
     gross_violation: bool
     details: list[dict]
+
+
+from pydantic import BaseModel, Field
+
+
+class AIEvaluationRequest(BaseModel):
+    conversation_id: str
+    checklist_id: int
+    checklist_version: str = "1"

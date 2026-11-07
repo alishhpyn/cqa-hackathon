@@ -1,4 +1,7 @@
-
+import json
+from fastapi import BackgroundTasks
+from app.schemas.evaluation import AIEvaluationRequest
+from app.services.evaluation_service import process_ai_evaluation
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -57,6 +60,95 @@ def list_conversations():
     return {
         "total": len(conversations),
         "conversations": conversations
+    }
+
+# -------------------------
+# AI Evaluations
+# -------------------------
+
+@app.post("/api/evaluations", status_code=202)
+def create_ai_evaluation(
+    request: AIEvaluationRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    conversation = get_conversation_by_id(
+        request.conversation_id
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
+
+    checklist = db.query(Checklist).filter(
+        Checklist.id == request.checklist_id
+    ).first()
+
+    if checklist is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Checklist not found"
+        )
+
+    evaluation = Evaluation(
+        conversation_id=request.conversation_id,
+        checklist_id=checklist.id,
+        checklist_version=request.checklist_version,
+        status="queued",
+        score=None,
+        gross_violation=False
+    )
+
+    db.add(evaluation)
+    db.commit()
+    db.refresh(evaluation)
+
+    background_tasks.add_task(
+        process_ai_evaluation,
+        evaluation.id
+    )
+
+    return {
+        "evaluation_id": evaluation.id,
+        "conversation_id": evaluation.conversation_id,
+        "checklist_id": evaluation.checklist_id,
+        "checklist_version": evaluation.checklist_version,
+        "status": evaluation.status
+    }
+
+
+@app.get("/api/evaluations/{evaluation_id}")
+def get_ai_evaluation(
+    evaluation_id: int,
+    db: Session = Depends(get_db)
+):
+    evaluation = db.query(Evaluation).filter(
+        Evaluation.id == evaluation_id
+    ).first()
+
+    if evaluation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Evaluation not found"
+        )
+
+    result = None
+
+    if evaluation.result_json:
+        result = json.loads(evaluation.result_json)
+
+    return {
+        "evaluation_id": evaluation.id,
+        "conversation_id": evaluation.conversation_id,
+        "checklist_id": evaluation.checklist_id,
+        "checklist_version": evaluation.checklist_version,
+        "status": evaluation.status,
+        "score": evaluation.score,
+        "gross_violation": evaluation.gross_violation,
+        "result": result,
+        "error": evaluation.error
     }
 
 
@@ -473,7 +565,7 @@ def review_appeal(
         for item in checklist.criteria
     ]
 
-    
+
     saved_results = db.query(CriterionResult).filter(
         CriterionResult.evaluation_id == evaluation.id
     ).all()
