@@ -86,11 +86,17 @@ def build_success_record(dialog: dict[str, Any], result: dict[str, Any]) -> dict
         item = result_criteria.get(source_id)
         if not isinstance(item, dict):
             raise ValueError(f"Evaluation result is missing criterion {source_id}")
+        evidence = item.get("evidence_replicas")
+        transcript = dialog.get("transcript")
+        if not isinstance(transcript, list) or not isinstance(evidence, list) or not evidence:
+            raise ValueError(f"Criterion {source_id} has no evidence turns")
+        if any(type(turn) is not int or not 1 <= turn <= len(transcript) for turn in evidence):
+            raise ValueError(f"Criterion {source_id} has invalid evidence turns")
         criteria.append({
             "criterion_id": target_id,
             "value": to_json_value(source_id, item.get("raw_value")),
             "rationale": str(item.get("explanation") or ""),
-            "evidence_turns": item.get("evidence_replicas") or [],
+            "evidence_turns": evidence,
         })
     score = result.get("total_score")
     return {

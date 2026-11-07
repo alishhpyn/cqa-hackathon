@@ -282,6 +282,8 @@ def validate_evaluation(
             errors.append(
                 f"Критерий {cid}: evidence_replicas должен быть списком"
             )
+        elif not evidence:
+            errors.append(f"Критерий {cid}: evidence_replicas не должен быть пустым")
         else:
             for replica in evidence:
 
@@ -293,9 +295,6 @@ def validate_evaluation(
 
                 if isinstance(replica, int):
                     number = replica
-
-                elif isinstance(replica, str) and replica.isdigit():
-                    number = int(replica)
 
                 else:
                     errors.append(
