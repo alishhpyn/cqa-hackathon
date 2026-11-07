@@ -13,7 +13,10 @@ from app.services.conversation_service import (
 from app.database.database import Base, engine, get_db
 from app.models.checklist import Checklist, Criterion
 from app.models.evaluation import Evaluation, CriterionResult
+from app.models.appeal import Appeal
+from app.schemas.appeal import AppealCreate, AppealReview
 from app.schemas.checklist import ChecklistCreate
+from datetime import datetime, timezone
 
 
 # Create database tables
@@ -302,6 +305,7 @@ def get_evaluation_results(
             "created_at": evaluation.created_at,
             "details": [
                 {
+                    "criterion_result_id": item.id,
                     "criterion_id": item.criterion_id,
                     "criterion": item.criterion_name,
                     "answer": item.answer,
@@ -315,4 +319,261 @@ def get_evaluation_results(
     return {
         "total": len(results),
         "results": results
+    }
+
+
+
+@app.post("/api/appeals")
+def create_appeal(
+    request: AppealCreate,
+    db: Session = Depends(get_db)
+):
+    evaluation = db.query(Evaluation).filter(
+        Evaluation.id == request.evaluation_id
+    ).first()
+
+    if evaluation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Evaluation not found"
+        )
+
+    criterion_result = db.query(CriterionResult).filter(
+        CriterionResult.id == request.criterion_result_id,
+        CriterionResult.evaluation_id == evaluation.id
+    ).first()
+
+    if criterion_result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Criterion result not found"
+        )
+
+    if not request.comment.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Comment cannot be empty"
+        )
+
+    appeal = Appeal(
+        evaluation_id=evaluation.id,
+        criterion_result_id=criterion_result.id,
+        comment=request.comment.strip(),
+        status="pending"
+    )
+
+    db.add(appeal)
+    db.commit()
+    db.refresh(appeal)
+
+    return {
+        "id": appeal.id,
+        "evaluation_id": appeal.evaluation_id,
+        "criterion_result_id": appeal.criterion_result_id,
+        "comment": appeal.comment,
+        "status": appeal.status
+    }
+
+
+
+@app.get("/api/appeals")
+def get_appeals(db: Session = Depends(get_db)):
+    appeals = db.query(Appeal).order_by(
+        Appeal.id.desc()
+    ).all()
+
+    results = []
+
+    for appeal in appeals:
+        criterion_result = db.query(CriterionResult).filter(
+            CriterionResult.id == appeal.criterion_result_id
+        ).first()
+
+        results.append({
+            "id": appeal.id,
+            "evaluation_id": appeal.evaluation_id,
+            "criterion_result_id": appeal.criterion_result_id,
+            "criterion": (
+                criterion_result.criterion_name
+                if criterion_result else None
+            ),
+            "original_answer": (
+                criterion_result.answer
+                if criterion_result else None
+            ),
+            "comment": appeal.comment,
+            "status": appeal.status,
+            "reviewer_answer": appeal.reviewer_answer,
+            "reviewer_reason": appeal.reviewer_reason,
+            "created_at": appeal.created_at
+        })
+
+    return {
+        "total": len(results),
+        "appeals": results
+    }
+
+
+
+@app.post("/api/appeals/{appeal_id}/review")
+def review_appeal(
+    appeal_id: int,
+    request: AppealReview,
+    db: Session = Depends(get_db)
+):
+    appeal = db.query(Appeal).filter(
+        Appeal.id == appeal_id
+    ).first()
+
+    if appeal is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Appeal not found"
+        )
+
+    if appeal.status == "reviewed":
+        raise HTTPException(
+            status_code=400,
+            detail="Appeal has already been reviewed"
+        )
+
+    evaluation = db.query(Evaluation).filter(
+        Evaluation.id == appeal.evaluation_id
+    ).first()
+
+    criterion_result = db.query(CriterionResult).filter(
+        CriterionResult.id == appeal.criterion_result_id
+    ).first()
+
+    if evaluation is None or criterion_result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Evaluation or criterion result not found"
+        )
+
+    checklist = db.query(Checklist).filter(
+        Checklist.id == evaluation.checklist_id
+    ).first()
+
+    if checklist is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Checklist not found"
+        )
+
+    criteria = [
+        {
+            "id": item.id,
+            "name": item.name,
+            "weight": item.weight,
+            "answer_type": item.answer_type,
+            "na_allowed": item.na_allowed,
+            "scale": item.scale
+        }
+        for item in checklist.criteria
+    ]
+
+    
+    saved_results = db.query(CriterionResult).filter(
+        CriterionResult.evaluation_id == evaluation.id
+    ).all()
+
+    saved_by_criterion = {
+        item.criterion_id: item
+        for item in saved_results
+    }
+
+    answers = {}
+
+    for criterion in criteria:
+        criterion_id = criterion["id"]
+        criterion_key = str(criterion_id)
+
+        if criterion["name"] == "Gross Violations":
+            answers[criterion_key] = (
+                "YES" if evaluation.gross_violation else "NO"
+            )
+            continue
+
+        saved_item = saved_by_criterion.get(criterion_id)
+
+        if saved_item:
+            answer = saved_item.answer
+
+            if criterion["answer_type"] == "numeric":
+                try:
+                    answer = float(answer)
+                    if answer.is_integer():
+                        answer = int(answer)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Invalid saved numeric answer"
+                    )
+
+            answers[criterion_key] = answer
+
+        elif criterion["na_allowed"]:
+            answers[criterion_key] = "N/A"
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing answer for {criterion['name']}"
+            )
+
+    original_answer = criterion_result.answer
+
+    answers[str(criterion_result.criterion_id)] = (
+        request.reviewer_answer
+    )
+
+
+    try:
+        result = calculate_score(criteria, answers)
+
+        # Update every criterion result
+        for detail in result["details"]:
+            saved_item = next(
+                (
+                    item for item in saved_results
+                    if item.criterion_id == detail["criterion_id"]
+                ),
+                None
+            )
+
+            if saved_item:
+                saved_item.answer = str(detail["answer"])
+                saved_item.points = detail["points"]
+
+        # Update overall evaluation
+        evaluation.score = result["score"]
+        evaluation.gross_violation = result["gross_violation"]
+
+        # Save reviewer decision
+        appeal.reviewer_answer = str(request.reviewer_answer)
+        appeal.reviewer_reason = request.reviewer_reason.strip()
+        appeal.status = "reviewed"
+        appeal.reviewed_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(evaluation)
+        db.refresh(appeal)
+
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(error))
+
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "appeal_id": appeal.id,
+        "status": appeal.status,
+        "original_answer": original_answer,
+        "reviewer_answer": appeal.reviewer_answer,
+        "reviewer_reason": appeal.reviewer_reason,
+        "new_score": evaluation.score,
+        "gross_violation": evaluation.gross_violation
     }
