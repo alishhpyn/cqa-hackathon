@@ -21,6 +21,7 @@ from .groq_client import (
     evaluate_dialog_via_groq,
     GroqClientError
 )
+from .consistency_warnings import check_criterion06
 
 PROMPT_VERSION = "v2.0-dynamic"
 CHECKLIST_VERSION_DEFAULT = "v1.0-official-8criteria"
@@ -81,8 +82,15 @@ def evaluate_dialog(
     if mock:
         llm_output = {}
         for cid, rule in cl.items():
+            rule_type = rule.get('type')
+            if rule_type in ('binary', 'binary_na'):
+                value = 'Да'
+            elif rule_type in ('scale', 'scale_na'):
+                value = max(x for x in rule.get('allowed_values', []) if type(x) in (int, float))
+            else:
+                value = 'Нет'
             llm_output[cid] = {
-                "value": "Да" if rule.get("type") in ["binary", "binary_na"] else (10 if cid == "06" else (20 if cid == "04" else "Нет")),
+                "value": value,
                 "explanation": f"Тестовая оценка критерия {cid}",
                 "evidence_replicas": [1]
             }
@@ -172,6 +180,7 @@ def evaluate_dialog(
 
     # Расчёт официального балла
     score_res = calculate_score(llm_output, checklist=cl)
+    warnings = check_criterion06(llm_output, transcript) if cl.get('06') == OFFICIAL_CHECKLIST.get('06') else []
 
     return {
         "dialog_id": conv_id,
@@ -185,6 +194,7 @@ def evaluate_dialog(
         "applicable_weight_sum": score_res["applicable_weight_sum"],
         "earned_points_sum": score_res["earned_points_sum"],
         "criteria": score_res["criteria"],
+        "warnings": warnings,
         "metrics": {
             "pure_model_time_sec": meta.get("pure_model_time", 0.0),
             "total_duration_sec": meta.get("total_duration", 0.0),

@@ -144,7 +144,7 @@ def calculate_score(
         is_na = (val == "N/A")
         rule_type = rule.get("type", "binary")
 
-        if rule_type == "flag" or cid == "08":
+        if rule_type == "flag":
             gross_error = (val == "Да")
             earned_points = 0.0
         elif is_na:
@@ -255,9 +255,11 @@ def validate_evaluation(
                 f"Критерий {cid}: N/A запрещено"
             )
 
-        # Check allowed value and exact type
+        # Numeric scales can come from the UI as floats and from the model as
+        # integers. Compare their numeric values without treating booleans as numbers.
         is_allowed = any(
-            type(val) == type(item) and val == item
+            ((type(val) in (int, float) and type(item) in (int, float))
+             or type(val) == type(item)) and val == item
             for item in allowed
         )
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.schemas.evaluation import EvaluationRequest
 from app.services.scoring_service import calculate_score
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import inspect, text
 
 from app.services.conversation_service import (
     get_all_conversations,
@@ -26,6 +27,12 @@ from datetime import datetime, timezone
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Existing SQLite databases predate the snapshot column. Keep their data and
+# add the nullable field without inventing historical original values.
+if 'original_answer' not in {column['name'] for column in inspect(engine).get_columns('appeals')}:
+    with engine.begin() as connection:
+        connection.execute(text('ALTER TABLE appeals ADD COLUMN original_answer VARCHAR'))
 
 # Ensure indexes are created for existing database tables
 for index in Evaluation.__table__.indexes:
@@ -539,6 +546,7 @@ def create_appeal(
         evaluation_id=evaluation.id,
         criterion_result_id=criterion_result.id,
         comment=request.comment.strip(),
+        original_answer=criterion_result.answer,
         status="pending"
     )
 
@@ -577,10 +585,9 @@ def get_appeals(db: Session = Depends(get_db)):
                 criterion_result.criterion_name
                 if criterion_result else None
             ),
-            "original_answer": (
-                criterion_result.answer
-                if criterion_result else None
-            ),
+            "original_answer": (appeal.original_answer if appeal.original_answer is not None
+                                else criterion_result.answer if criterion_result and appeal.status == 'pending'
+                                else None),
             "comment": appeal.comment,
             "status": appeal.status,
             "reviewer_answer": appeal.reviewer_answer,
@@ -712,7 +719,9 @@ def review_appeal(
                 detail=f"Missing answer for {criterion['name']}"
             )
 
-    original_answer = criterion_result.answer
+    original_answer = appeal.original_answer if appeal.original_answer is not None else criterion_result.answer
+    if appeal.original_answer is None:
+        appeal.original_answer = original_answer
 
     answers[str(criterion_result.criterion_id)] = (
         request.reviewer_answer

@@ -30,6 +30,7 @@ class Appeal(Base):
     )
 
     comment = Column(Text, nullable=False)
+    original_answer = Column(String, nullable=True)
 
     status = Column(
         String,
