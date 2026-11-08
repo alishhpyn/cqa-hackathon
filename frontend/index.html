@@ -70,12 +70,13 @@
       100% { transform: scale(0.95); opacity: 0.8; }
     }
   </style>
+  <link rel="stylesheet" href="workspace.css">
 </head>
-<body class="bg-[#F2F6F3] text-charcoal-900 font-sans antialiased min-h-screen flex flex-col">
+<body class="audit-desk bg-[#F2F6F3] text-charcoal-900 font-sans antialiased min-h-screen flex flex-col">
 
   <!-- TOP HEADER / BRAND BAR (Freedom Broker Fintech Dark-Emerald) -->
-  <header class="bg-brand-950 text-white border-b border-brand-800 sticky top-0 z-40 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+  <header class="audit-header bg-brand-950 text-white border-b border-brand-800 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 audit-header-inner flex items-center justify-between">
       
       <!-- Brand Logo & Badge -->
       <div class="flex items-center gap-4">
@@ -87,11 +88,8 @@
             </svg>
           </div>
           <div>
-            <div class="flex items-center gap-2">
-              <span class="font-bold text-lg tracking-tight text-white font-mono">FREEDOM</span>
-              <span class="text-xs uppercase tracking-widest px-1.5 py-0.5 rounded bg-brand-500 text-brand-950 font-bold">DIALOG</span>
-            </div>
-            <p class="text-[11px] text-charcoal-400 font-medium">Quality Assurance AI • Freedom Broker</p>
+            <div class="audit-brand">Freedom Dialog</div>
+            <p class="audit-brand-note">Контроль качества общения</p>
           </div>
         </a>
 
@@ -107,11 +105,11 @@
       </div>
 
       <!-- Navigation Tabs -->
-      <nav class="flex items-center gap-1 sm:gap-2">
+      <nav aria-label="Разделы приложения" class="audit-nav flex items-center gap-1 sm:gap-2">
         <button id="nav-dialogs" onclick="switchTab('dialogs')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition text-charcoal-400 hover:text-white hover:bg-brand-900/60">
           Диалоги
         </button>
-        <button id="nav-dialog-card" onclick="switchTab('dialog-card')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition bg-brand-600 text-white shadow-sm font-semibold">
+        <button id="nav-dialog-card" aria-current="page" onclick="switchTab('dialog-card')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition bg-brand-600 text-white shadow-sm font-semibold">
           Карточка диалога
         </button>
         <button id="nav-checklists" onclick="switchTab('checklists')" class="px-3.5 py-2 rounded-lg text-sm font-medium transition text-charcoal-400 hover:text-white hover:bg-brand-900/60">
@@ -121,7 +119,7 @@
           Апелляции
           <span id="appeals-counter" class="ml-1.5 px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-charcoal-900 font-bold">1</span>
         </button>
-        <button onclick="toggleApiModal()" title="Настройки API / FastAPI" class="ml-2 p-2 rounded-lg bg-brand-900/80 text-charcoal-300 hover:text-white border border-brand-800 hover:border-brand-700 transition">
+        <button onclick="toggleApiModal()" aria-label="Настройки подключения" title="Настройки подключения" class="ml-2 p-2 rounded-lg bg-brand-900/80 text-charcoal-300 hover:text-white border border-brand-800 hover:border-brand-700 transition">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -133,11 +131,11 @@
   </header>
 
   <!-- QUICK INFO BAR / TOAST NOTIFICATION AREA -->
-  <div id="toast-banner" class="hidden bg-emerald-50 border-b border-emerald-200 text-emerald-900 px-4 py-2 text-xs flex justify-between items-center transition">
+  <div id="toast-banner" class="audit-toast hidden bg-emerald-50 border-b border-emerald-200 text-emerald-900 px-4 py-2 text-xs flex justify-between items-center transition">
     <div class="flex items-center gap-2 max-w-7xl mx-auto w-full">
       <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-      <span id="toast-text" class="font-medium"></span>
-      <button onclick="document.getElementById('toast-banner').classList.add('hidden')" class="ml-auto text-emerald-700 hover:text-emerald-950 font-bold">&times;</button>
+      <span id="toast-text" role="status" aria-live="polite" class="font-medium"></span>
+      <button onclick="document.getElementById('toast-banner').classList.add('hidden')" aria-label="Закрыть уведомление" class="ml-auto font-bold">&times;</button>
     </div>
   </div>
 
@@ -230,7 +228,8 @@
     <section id="view-dialog-card" class="space-y-5">
       
       <!-- Top Meta Banner & Actions Bar -->
-      <div class="bg-white rounded-2xl border border-surface-border p-5 shadow-sm">
+      <div class="audit-meta bg-white rounded-2xl border border-surface-border p-5 shadow-sm">
+        <h1 class="audit-title">Карточка диалога</h1>
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
           <!-- Left: Meta details & Badges -->
@@ -266,7 +265,7 @@
             </div>
 
             <!-- Main CTA Button -->
-            <button id="btn-evaluate" onclick="startEvaluationProcess()" class="bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-md transition flex items-center gap-2">
+            <button id="btn-evaluate" onclick="startEvaluationProcess()" class="audit-button">
               <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
@@ -320,30 +319,30 @@
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         <!-- LEFT COLUMN: ТРАНСКРИПТ ДИАЛОГА (6 Cols on Desktop) -->
-        <div class="lg:col-span-6 space-y-3">
-          <div class="bg-white rounded-2xl border border-surface-border p-4 shadow-sm flex items-center justify-between">
+        <div class="audit-column audit-transcript-column lg:col-span-6">
+          <div class="audit-transcript-header bg-white rounded-2xl border border-surface-border p-4 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <svg class="w-4 h-4 text-charcoal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"/></svg>
               <h3 class="font-bold text-sm text-charcoal-900">Стенограмма диалога</h3>
               <span id="turns-count-badge" class="px-2 py-0.5 rounded-full text-[11px] bg-slate-100 text-charcoal-600 font-mono font-medium">8 реплик</span>
             </div>
             <div class="text-xs text-charcoal-400">
-              Клик по доказательству справа подсветит реплику
+              Номер в оценке ведёт к реплике
             </div>
           </div>
 
           <!-- Transcript Scrollable Feed -->
-          <div id="transcript-feed" class="space-y-3 max-h-[720px] overflow-y-auto pr-1">
+          <div id="transcript-feed" class="audit-transcript space-y-3 max-h-[720px] overflow-y-auto pr-1">
             <!-- Dynamically populated via JS -->
           </div>
         </div>
 
         <!-- RIGHT COLUMN: РЕЗУЛЬТАТЫ ИИ-ОЦЕНКИ (6 Cols on Desktop) -->
-        <div class="lg:col-span-6 space-y-4">
+        <div class="audit-column lg:col-span-6 space-y-4">
           
           <!-- Score Summary Card -->
-          <div class="bg-white rounded-2xl border border-surface-border p-5 shadow-sm">
-            <div class="flex items-center justify-between">
+          <div class="audit-score bg-white rounded-2xl border border-surface-border p-5 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-charcoal-400">Итоговый балл качества</span>
                 <div class="flex items-baseline gap-2 mt-1">
@@ -918,6 +917,7 @@
         if (navEl) {
           navEl.classList.remove('bg-brand-600', 'text-white', 'font-semibold');
           navEl.classList.add('text-charcoal-400');
+          navEl.removeAttribute('aria-current');
         }
       });
 
@@ -925,6 +925,7 @@
       const activeNav = document.getElementById(`nav-${tabId}`);
       if (activeView) activeView.classList.remove('hidden');
       if (activeNav) {
+        activeNav.setAttribute('aria-current', 'page');
         activeNav.classList.remove('text-charcoal-400');
         activeNav.classList.add('bg-brand-600', 'text-white', 'font-semibold');
       }
@@ -1199,7 +1200,7 @@
       const targetEl = document.getElementById(`transcript-turn-${turnId}`);
       if (targetEl) {
         targetEl.classList.add('active-highlight');
-        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetEl.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
 
         // Show toast
         showToast(`Фокус на реплике #${turnId} в транскрипте`);
