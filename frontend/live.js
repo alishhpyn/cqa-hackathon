@@ -6,6 +6,67 @@
   const statuses = { queued:'В очереди', running:'Оценивается', completed:'Оценён', failed:'Ошибка' };
   const safe = value => escapeHtml(String(value ?? ''));
   const message = error => showToast(error.message);
+  const moveLabels = [
+    {symbol: '!', label: 'Сильный ответ', tone: 'good'},
+    {symbol: '!?', label: 'Можно лучше', tone: 'partial'},
+    {symbol: '?', label: 'Ошибка', tone: 'error'},
+    {symbol: '??', label: 'Грубое нарушение', tone: 'critical'},
+  ];
+
+  function clearMoveAnalysis() {
+    $('transcript-feed').querySelectorAll('.move-badge').forEach(badge => badge.remove());
+    $('move-analysis').replaceChildren();
+    $('move-analysis').hidden = true;
+  }
+
+  function showMoveAnalysis(evaluation, transcript) {
+    clearMoveAnalysis();
+    const turns = new Map(transcript.map((turn, index) => [turn.turn_id ?? index + 1, turn]));
+    const marked = new Map();
+    for (const criterion of Object.values(evaluation.result?.criteria || {})) {
+      const {raw_value: answer, weight, earned_points: points} = criterion;
+      if (answer == null || answer === 'N/A') continue;
+      const isFlag = /^(Gross Violations|Грубые ошибки)$/i.test(criterion.name?.trim());
+      if (isFlag && !['Да', 'YES'].includes(answer)) continue;
+      if (!isFlag && !(weight > 0 && Number.isFinite(points))) continue;
+      const rank = isFlag ? 3 : points <= 0 ? 2 : points < weight ? 1 : 0;
+      for (const id of criterion.evidence_replicas || []) {
+        if (turns.get(id)?.speaker !== 'operator') continue;
+        const previous = marked.get(id);
+        if (!previous || rank > previous.rank) {
+          marked.set(id, {rank, criterion});
+        }
+      }
+    }
+    const counts = moveLabels.map(() => 0);
+    for (const [id, {rank, criterion}] of marked) {
+      const turn = $('transcript-turn-'+id);
+      if (!turn) continue;
+      const {symbol, label, tone} = moveLabels[rank];
+      const badge = document.createElement('span');
+      badge.className = 'move-badge move-'+tone;
+      badge.textContent = symbol;
+      badge.title = label + ' · ' + criterion.name + (criterion.explanation ? ' · ' + criterion.explanation : '');
+      badge.setAttribute('aria-label', badge.title);
+      turn.prepend(badge);
+      counts[rank]++;
+    }
+    const summary = $('move-analysis');
+    if (counts.some(Boolean)) {
+      summary.innerHTML = `
+        <div class="move-analysis-heading">Разбор реплик <span>Оценка ИИ №${safe(evaluation.evaluation_id)}</span></div>
+        <ul class="move-legend" aria-label="Отметки реплик оператора">
+          ${moveLabels.map(({symbol, label, tone}, i) => `
+            <li class="move-chip move-${tone}">
+              <span aria-hidden="true">${symbol}</span> ${label} <strong>${counts[i]}</strong>
+            </li>`).join('')}
+        </ul>`;
+    } else {
+      summary.textContent = 'В оценке ИИ нет ссылок на реплики оператора для разбора.';
+    }
+    summary.hidden = false;
+  }
+
   async function api(path, method = 'GET', body) {
     const res = await fetch(window.FreedomAPI.baseUrl.replace(/\/$/, '') + '/api' + path,
       { method, ...(body === undefined ? {} : {headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)}) });
@@ -152,6 +213,7 @@
     const r = await api('/conversations/'+encodeURIComponent(id));
     if (!live || ticket !== requestId) return;
     active = r;
+    clearMoveAnalysis();
     const saved = rows.find(x => x.conversation_id === id)?.evaluation;
     if (saved) active.evaluation = saved;
     currentActiveDialog = {id:r.conversation_id,langTitle:safe(r.language), channelTitle:safe(r.channel),
@@ -252,6 +314,7 @@
     if ($('btn-evaluate').disabled) return;
     const btn=$('btn-evaluate'), timer=$('eval-timer');
     btn.disabled=true;
+    clearMoveAnalysis();
     $('eval-error-alert').classList.add('hidden');
     $('eval-loading-alert').classList.remove('hidden');
     timer.textContent='В очереди';
@@ -274,6 +337,7 @@
         timer.textContent=statuses[e.status] || e.status;
         if(e.status==='failed') throw new Error(e.error || 'Оценка завершилась ошибкой');
         if(e.status==='completed') {
+          if (active?.conversation_id === id) showMoveAnalysis(e, active.transcript);
           const {conversations} = await api('/conversations');
           if (!live) return;
           rows = conversations;
