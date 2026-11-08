@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from fastapi import BackgroundTasks
 from app.schemas.evaluation import AIEvaluationRequest
@@ -89,6 +90,9 @@ def import_dataset_endpoint(request: DatasetImportRequest):
             status_code=400,
             detail="Invalid group_id. Use DEV or PROD."
         )
+
+    if group_id == "PROD" and os.getenv("CQA_DEV_ONLY") == "1":
+        raise HTTPException(status_code=403, detail="This server only imports DEV.")
 
     try:
         result = import_dataset(group_id)
