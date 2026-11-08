@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.schemas.evaluation import EvaluationRequest
 from app.services.scoring_service import calculate_score
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import inspect, text
+from sqlalchemy import case, func, inspect, text
 
 from app.services.conversation_service import (
     get_all_conversations,
@@ -107,18 +107,44 @@ def import_dataset_endpoint(request: DatasetImportRequest):
         )
 
 @app.get("/api/conversations")
-def list_conversations():
+def list_conversations(db: Session = Depends(get_db)):
     try:
         conversations = get_all_conversations()
-
-        return {
-            "total": len(conversations),
-            "active_dataset": get_active_dataset().upper(),
-            "conversations": conversations
-        }
-
     except (RuntimeError, ValueError, FileNotFoundError) as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+    reviewed_id = func.max(case((Appeal.id.isnot(None), Evaluation.id)))
+    selected = (
+        db.query(
+            func.coalesce(reviewed_id, func.max(Evaluation.id)).label("evaluation_id"),
+            reviewed_id.label("reviewed_id"),
+        )
+        .outerjoin(Appeal, (Appeal.evaluation_id == Evaluation.id) & (Appeal.status == "reviewed"))
+        .group_by(Evaluation.conversation_id)
+        .subquery()
+    )
+    evaluations = {
+        item.conversation_id: {
+            "evaluation_id": item.id,
+            "status": item.status,
+            "score": item.score,
+            "gross_violation": item.gross_violation,
+            "reviewed": item.reviewed_id is not None,
+        }
+        for item in db.query(
+            Evaluation.id, Evaluation.conversation_id, Evaluation.status,
+            Evaluation.score, Evaluation.gross_violation, selected.c.reviewed_id,
+        ).join(selected, selected.c.evaluation_id == Evaluation.id)
+    }
+    return {
+        "total": len(conversations),
+        "active_dataset": get_active_dataset().upper(),
+        "conversations": [
+            {**conversation, "evaluation": evaluations.get(conversation["conversation_id"])}
+            for conversation in conversations
+        ],
+    }
+
 
 # -------------------------
 # AI Evaluations
@@ -479,6 +505,22 @@ def get_evaluation_results(
             detail="No evaluation results found"
         )
 
+    reviews = (
+        db.query(Appeal)
+        .filter(
+            Appeal.evaluation_id.in_([evaluation.id for evaluation in evaluations]),
+            Appeal.status == "reviewed",
+        )
+        .order_by(Appeal.reviewed_at.desc(), Appeal.id.desc())
+        .all()
+    )
+    latest_reviews = {}
+    for review in reviews:
+        latest_reviews.setdefault(review.criterion_result_id, {
+            "answer": review.reviewer_answer,
+            "reason": review.reviewer_reason,
+        })
+
     results = []
 
     for evaluation in evaluations:
@@ -504,7 +546,8 @@ def get_evaluation_results(
                     "criterion": item.criterion_name,
                     "answer": item.answer,
                     "weight": item.weight,
-                    "points": item.points
+                    "points": item.points,
+                    "review": latest_reviews.get(item.id),
                 }
                 for item in criterion_results
             ]

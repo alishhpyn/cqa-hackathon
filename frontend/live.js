@@ -3,7 +3,7 @@
   const demo = { switchTab, renderDialogsTable, startEvaluationProcess, renderChecklistEditor,
     saveChecklistNewVersion, openNewCriterionModal, renderAppealsList, toggleApiMode, triggerNewBatchEvaluation };
   let live = false, rows = [], lists = [], draft = null, active = null, requestId = 0;
-  const statuses = { queued:'В очереди', running:'Оценивается', completed:'Готово', failed:'Ошибка' };
+  const statuses = { queued:'В очереди', running:'Оценивается', completed:'Оценён', failed:'Ошибка' };
   const safe = value => escapeHtml(String(value ?? ''));
   const message = error => showToast(error.message);
   async function api(path, method = 'GET', body) {
@@ -125,13 +125,16 @@
       const channel = /voice|call/i.test(r.channel) ? 'Звонок' : 'Чат';
       const lang = $('filter-lang').value, ch = $('filter-channel').value;
       const status = statuses[r.evaluation?.status] || 'Не оценён';
+      const selectedStatus = $('filter-status').value;
+      const filterStatus = selectedStatus === 'Готово' ? statuses.completed : selectedStatus;
       if (!r.conversation_id.toLowerCase().includes($('filter-search').value.toLowerCase()) ||
           lang !== 'ALL' && lang !== r.language ||
           ch !== 'ALL' && ![channel, r.channel, channel === 'Чат' ? 'Chat' : 'Voice'].includes(ch) ||
-          $('filter-status').value !== 'ALL' && $('filter-status').value !== status) continue;
+          filterStatus !== 'ALL' && filterStatus !== status) continue;
       const tr = body.insertRow();
       tr.className = 'border-b border-surface-border hover:bg-brand-50 cursor-pointer text-xs';
-      for (const v of [r.conversation_id,r.language,channel,'—',status,r.evaluation?.score ?? '—']) {
+      const displayStatus = r.evaluation?.reviewed ? 'Проверено вручную' : status;
+      for (const v of [r.conversation_id,r.language,channel,'—',displayStatus,r.evaluation?.score ?? '—']) {
         const td = tr.insertCell(); td.className = 'p-3'; td.textContent = v;
       }
       const btn = document.createElement('button');
@@ -164,7 +167,10 @@
     }
     $('critical-flaw-box').classList.add('hidden');
     $('score-evaluation-timestamp').textContent='';
-    if (saved?.status === 'completed') await showResult(saved);
+    if (saved?.status === 'completed') {
+      const evaluation = await api('/evaluations/'+saved.evaluation_id);
+      if (live && ticket === requestId) await showResult(evaluation);
+    }
     else {
       try {
         const hist = await api('/results/'+encodeURIComponent(id));
@@ -182,17 +188,29 @@
     const raw = Object.values(e.result?.criteria || {});
     $('score-number').textContent=e.score ?? '—';
     $('score-bar').style.width=(e.score ?? 0)+'%';
-    $('card-status-badge').textContent='Готово';
+    const effective = rows.find(row => row.conversation_id === id)?.evaluation;
+    $('card-status-badge').textContent =
+      effective?.reviewed && effective.evaluation_id === e.evaluation_id
+        ? 'Проверено вручную' : statuses.completed;
     $('score-evaluation-timestamp').textContent='Оценка №'+e.evaluation_id;
     $('critical-flaw-box').className='rounded-xl p-2 text-xs font-bold '+(e.gross_violation?'bg-red-100 text-red-800':'bg-emerald-50 text-emerald-800');
     $('critical-flaw-box').textContent=e.gross_violation?'Обнаружено грубое нарушение':'Грубых нарушений нет';
     $('criteria-container').innerHTML=stored.map((c,i)=>{
-      const a=raw.find(x=>x.criterion_id===c.criterion_id) || raw[i];
+      const original = raw.find(x=>x.criterion_id===c.criterion_id);
+      const a = original || raw[i];
       const canonical = v => ({YES:"Да", NO:"Нет"}[v] ?? String(v));
       const matches = a && canonical(a.raw_value) === canonical(c.answer);
       const evidence=(a?.evidence_replicas || []).filter(Number.isInteger);
+      const review = c.review;
+      const reviewNote = review ? `<div class="rounded-lg bg-brand-50 p-3 text-sm space-y-1">
+        <strong>Проверено аудитором</strong>
+        ${a?.raw_value != null ? `<p>Ответ ИИ: ${safe(canonical(a.raw_value))}</p>` : ''}
+        <p>Решение аудитора: ${safe(canonical(review.answer))}</p>
+        <p>Причина: ${safe(review.reason)}</p>
+      </div>` : '';
       return `<details class="p-4 rounded-xl border bg-white space-y-2">
-        <summary class="cursor-pointer text-sm"><strong>${safe(c.criterion)}</strong> <span class="font-mono text-xs">${c.answer === "N/A" ? "N/A" : Number(c.weight) === 0 ? safe(c.answer) : safe(c.points)+" из "+safe(c.weight)}</span></summary>
+        <summary class="cursor-pointer text-sm"><strong>${safe(c.criterion)}</strong> <span class="font-mono text-xs">${c.answer === "N/A" ? "N/A" : Number(c.weight) === 0 ? safe(c.answer) : safe(c.points)+" из "+safe(c.weight)}</span>${review ? ' <span class="text-xs text-brand-700">Проверено аудитором</span>' : ''}</summary>
+        ${reviewNote}
         <p class="text-xs text-charcoal-600">${matches?safe(a.explanation):a?'Исходное объяснение ИИ: '+safe(a.explanation):''}</p>
         <div class="flex gap-2 flex-wrap">${evidence.map(n=>`<button class="text-xs rounded bg-brand-50 px-2 py-1" onclick="highlightAndScrollToTurn(${n})">Реплика №${n}</button>`).join('')}
         <button class="text-xs text-brand-700" onclick="submitLiveAppeal(${Number(e.evaluation_id)},${Number(c.criterion_result_id)})">Оспорить</button></div></details>`;
@@ -210,15 +228,36 @@
     timer.textContent='В очереди';
     try {
       const job=await api('/evaluations','POST',{conversation_id:id,checklist_id,checklist_version:'1'});
+      const updateRow = evaluation => {
+        const row = rows.find(x => x.conversation_id === id);
+        if (live && row && !row.evaluation?.reviewed &&
+            (row.evaluation?.evaluation_id ?? 0) <= evaluation.evaluation_id) {
+          row.evaluation = evaluation;
+          window.renderDialogsTable();
+        }
+      };
+      updateRow(job);
       for (let i=0;i<240;i++) {
         await new Promise(resolve=>setTimeout(resolve,2200));
         const e=await api('/evaluations/'+job.evaluation_id);
         if (!live) return;
+        updateRow(e);
         timer.textContent=statuses[e.status] || e.status;
         if(e.status==='failed') throw new Error(e.error || 'Оценка завершилась ошибкой');
         if(e.status==='completed') {
-          rows.find(x=>x.conversation_id===id).evaluation=e;
-          if(active?.conversation_id===id) await showResult(e);
+          const {conversations} = await api('/conversations');
+          if (!live) return;
+          rows = conversations;
+          window.renderDialogsTable();
+          const effective = rows.find(row => row.conversation_id === id)?.evaluation;
+          if (active?.conversation_id === id && effective) {
+            const result = effective.evaluation_id === e.evaluation_id
+              ? e : await api('/evaluations/'+effective.evaluation_id);
+            if (active?.conversation_id === id) await showResult(result);
+          }
+          if (effective?.reviewed && effective.evaluation_id !== e.evaluation_id) {
+            showToast(`Новая оценка ИИ: ${e.score ?? '—'}. В списке действует ручная оценка: ${effective.score ?? '—'}.`);
+          }
           return;
         }
       }
@@ -260,9 +299,12 @@
     if (!reason) return;
     try {
       const r=await api('/appeals/'+id+'/review','POST',{reviewer_answer:Number.isFinite(Number(value))?Number(value):value,reviewer_reason:reason});
-      for(const row of rows) delete row.evaluation;
       showToast('Пересчитанный итог: '+(r.new_score ?? '—'));
       window.renderAppealsList();
+      const {conversations} = await api('/conversations');
+      if (!live) return;
+      rows = conversations;
+      window.renderDialogsTable();
     } catch(e) { message(e); }
   };
   $('api-retry').onclick = () => window.toggleApiMode('live');

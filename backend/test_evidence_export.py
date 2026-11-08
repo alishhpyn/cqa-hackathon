@@ -42,7 +42,7 @@ class EvidenceTests(unittest.TestCase):
         prompt = build_system_prompt(configured)
         self.assertIn('Проверяйте уникальное правило для нового критерия.', prompt)
         self.assertNotIn('Ступень 4: Клиенту пришлось переспросить', prompt)
-        self.assertIn('Критерий 03: оценивай необходимость', prompt)
+        self.assertIn('Критерий 03: сначала определи, нужна ли проверка личности', prompt)
         self.assertIn('Ступень 4: Клиенту пришлось переспросить', build_system_prompt())
 
     def test_ui_float_scale_accepts_model_integer_not_boolean(self):

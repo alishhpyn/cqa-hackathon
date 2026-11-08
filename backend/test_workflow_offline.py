@@ -100,35 +100,80 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(created.status_code, 200, created.text)
         checklist = created.json()
         dialog = {'conversation_id': 'example', 'transcript': [
-            {'timestamp': '00:01', 'speaker': 'client', 'text': 'Общий вопрос'},
-            {'timestamp': '00:02', 'speaker': 'operator', 'text': 'Здравствуйте, я Алия.'}]}
+            {'speaker': 'client', 'text': 'Почему не обновляется график котировок?'},
+            {'speaker': 'operator', 'text': 'Добрый день. Меня зовут Руслан.'},
+            {'speaker': 'operator', 'text': 'У нас всё работает штатно, проблема на вашей стороне.'},
+            {'speaker': 'client', 'text': 'Я перезагружал приложение три раза, график застыл на 15:00!'},
+            {'speaker': 'operator', 'text': 'Вы слепой что ли? [Данные другого клиента скрыты]'},
+            {'speaker': 'client', 'text': 'Я делаю скриншот и отправляю в службу комплаенс!'},
+            {'speaker': 'operator', 'text': 'Жалуйтесь куда хотите.'}]}
+        closing_id = checklist['criteria'][6]['id']
+        reason = (
+            'В реплике №7 оператор ответил «Жалуйтесь куда хотите». '
+            'Он мог завершить чат, но не подвёл итог, не предложил дальнейшую помощь и не попрощался.'
+        )
         def fake_evaluate(*args, **kwargs):
             kwargs['mock'] = True
-            return evaluate_dialog(*args, **kwargs)
-        with patch('app.main.get_conversation_by_id', return_value=dialog), \
-             patch('app.services.evaluation_service.get_conversation_by_id', return_value=dialog), \
-             patch('app.services.evaluation_service.SessionLocal', self.sessions), \
-             patch('app.services.evaluation_service.evaluate_dialog', side_effect=fake_evaluate):
-            response = self.client.post('/api/evaluations', json={'conversation_id': 'example',
-                'checklist_id': checklist['id'], 'checklist_version': '1'})
+            result = evaluate_dialog(*args, **kwargs)
+            closing = result['criteria']['07']
+            closing.update(raw_value='N/A', earned_points=0, evidence_replicas=[7])
+            return result
+        def start_evaluation():
+            with patch('app.main.get_conversation_by_id', return_value=dialog), \
+                 patch('app.services.evaluation_service.get_conversation_by_id', return_value=dialog), \
+                 patch('app.services.evaluation_service.SessionLocal', self.sessions), \
+                 patch('app.services.evaluation_service.evaluate_dialog', side_effect=fake_evaluate):
+                return self.client.post('/api/evaluations', json={'conversation_id': 'example',
+                    'checklist_id': checklist['id'], 'checklist_version': '1'})
+
+        response = start_evaluation()
         self.assertEqual(response.status_code, 202, response.text)
         evaluation_id = response.json()['evaluation_id']
         evaluation = self.client.get(f'/api/evaluations/{evaluation_id}').json()
         self.assertEqual(evaluation['status'], 'completed', evaluation)
+        with patch('app.main.get_all_conversations', return_value=[
+            dialog, {'conversation_id': 'unrated', 'transcript': []}
+        ]):
+            listed = self.client.get('/api/conversations').json()['conversations']
+        self.assertEqual(listed[0]['evaluation']['evaluation_id'], evaluation_id)
+        self.assertEqual(listed[0]['evaluation']['status'], 'completed')
+        self.assertEqual(listed[0]['evaluation']['score'], evaluation['score'])
+        self.assertFalse(listed[0]['evaluation']['reviewed'])
+        self.assertIsNone(listed[1]['evaluation'])
         results = self.client.get('/api/results/example').json()
         details = results['results'][0]['details']
-        criterion = next(x for x in details if x['criterion_id'] == checklist['criteria'][0]['id'])
+        criterion = next(x for x in details if x['criterion_id'] == closing_id)
         appeal = self.client.post('/api/appeals', json={'evaluation_id': evaluation_id,
-            'criterion_result_id': criterion['criterion_result_id'], 'comment': 'Проверить приветствие'})
+            'criterion_result_id': criterion['criterion_result_id'], 'comment': 'Проверить завершение чата'})
         self.assertEqual(appeal.status_code, 200, appeal.text)
         decision = self.client.post(f"/api/appeals/{appeal.json()['id']}/review", json={
-            'reviewer_answer': 'NO', 'reviewer_reason': 'Приветствия не было'})
+            'reviewer_answer': 'NO', 'reviewer_reason': reason})
         self.assertEqual(decision.status_code, 200, decision.text)
-        self.assertEqual(decision.json()['original_answer'], 'Да')
+        self.assertEqual(decision.json()['original_answer'], 'N/A')
         self.assertLess(decision.json()['new_score'], evaluation['score'])
         saved = self.client.get('/api/appeals').json()['appeals'][0]
         self.assertEqual(saved['reviewer_answer'], 'NO')
-        self.assertEqual(saved['original_answer'], 'Да')
+        self.assertEqual(saved['original_answer'], 'N/A')
+        updated = self.client.get('/api/results/example').json()['results'][0]
+        reviewed = next(x for x in updated['details'] if x['criterion_result_id'] == criterion['criterion_result_id'])
+        self.assertEqual(reviewed['review'], {'answer': 'NO', 'reason': reason})
+        self.assertEqual(updated['score'], decision.json()['new_score'])
+
+        repeat = start_evaluation()
+        self.assertEqual(repeat.status_code, 202, repeat.text)
+        repeat_id = repeat.json()['evaluation_id']
+        self.assertGreater(repeat_id, evaluation_id)
+        history = self.client.get('/api/results/example').json()['results']
+        self.assertEqual([(item['evaluation_id'], item['score']) for item in history], [
+            (repeat_id, evaluation['score']),
+            (evaluation_id, decision.json()['new_score']),
+        ])
+        with patch('app.main.get_all_conversations', return_value=[dialog]):
+            listed = self.client.get('/api/conversations').json()['conversations'][0]['evaluation']
+        self.assertEqual(listed['evaluation_id'], evaluation_id)
+        self.assertEqual(listed['status'], 'completed')
+        self.assertTrue(listed['reviewed'])
+        self.assertEqual(listed['score'], decision.json()['new_score'])
 
 
 if __name__ == '__main__': unittest.main()

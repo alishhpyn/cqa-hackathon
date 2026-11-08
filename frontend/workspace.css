@@ -10,8 +10,14 @@
 body.audit-desk { background: var(--desk); color: var(--ink); }
 .audit-header { background: #142f2c; border-color: #32534c; }
 .audit-header-inner { min-height: 4.5rem; }
-.audit-brand { letter-spacing: -.035em; font-size: 1.2rem; font-weight: 750; color: white; }
-.audit-brand-note { font-size: .75rem; color: #c1d7d1; }
+.audit-logo {
+  display: block;
+  width: clamp(9.5rem, 16vw, 12rem);
+  padding: .35rem .45rem;
+  border-radius: .55rem;
+  background: white;
+}
+.audit-logo svg { display: block; width: 100%; height: auto; }
 .audit-nav { gap: .25rem; }
 .audit-nav button[id^="nav-"] { color: #c1d7d1; white-space: nowrap; }
 .audit-nav button[aria-current="page"] { background: #35534e; color: white; }

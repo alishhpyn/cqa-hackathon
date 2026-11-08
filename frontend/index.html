@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="freedom-dialog-icon.png">
   <title>Freedom Dialog — AI Оценка качества диалогов</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -80,17 +81,10 @@
       
       <!-- Brand Logo & Badge -->
       <div class="flex items-center gap-4">
-        <a href="#" onclick="switchTab('dialog-card')" class="flex items-center gap-3 group">
-          <div class="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-500 shadow-inner group-hover:bg-brand-500/30 transition">
-            <!-- Dialog Sparkle Icon -->
-            <svg class="w-5 h-5 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </div>
-          <div>
-            <div class="audit-brand">Freedom Dialog</div>
-            <p class="audit-brand-note">Контроль качества общения</p>
-          </div>
+        <a href="#" onclick="switchTab('dialog-card')" class="audit-logo" aria-label="Freedom Dialog">
+          <svg viewBox="360 588 2032 388" aria-hidden="true" focusable="false">
+            <image href="freedom-dialog-logo.png" width="2752" height="1536"/>
+          </svg>
         </a>
 
         <div class="hidden md:flex items-center gap-2 pl-4 ml-4 border-l border-brand-800 text-xs">
