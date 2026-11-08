@@ -113,6 +113,7 @@
       currentActiveDialog = null;
       demo.switchTab(tab);
       currentActiveDialog = current;
+      loadCardResult(active.conversation_id, ++requestId);
       return;
     }
     demo.switchTab(tab);
@@ -167,17 +168,41 @@
     }
     $('critical-flaw-box').classList.add('hidden');
     $('score-evaluation-timestamp').textContent='';
-    if (saved?.status === 'completed') {
-      const evaluation = await api('/evaluations/'+saved.evaluation_id);
-      if (live && ticket === requestId) await showResult(evaluation);
-    }
-    else {
+    await loadCardResult(id, ticket);
+  }
+  async function loadCardResult(id, ticket) {
+    const current = () => live && ticket === requestId && active?.conversation_id === id;
+    const container = $('criteria-container');
+    container.textContent = 'Загружаем результаты оценки…';
+    try {
+      const {results} = await api('/results/'+encodeURIComponent(id));
+      if (!current()) return;
+      const saved = rows.find(row => row.conversation_id === id)?.evaluation;
+      const scored = results.filter(item => item.score != null || item.details?.length);
+      const selected = scored.find(item => item.evaluation_id === saved?.evaluation_id)
+        ?? scored.find(item => item.details?.some(criterion => criterion.review))
+        ?? scored[0];
+      if (!selected) {
+        container.textContent = 'У диалога пока нет завершённой оценки.';
+        return;
+      }
+      // History contains the reviewed score and criterion answers. The AI payload
+      // is supplemental and may be unavailable for older evaluations.
+      renderResult(selected, selected.details ?? []);
       try {
-        const hist = await api('/results/'+encodeURIComponent(id));
-        if (ticket !== requestId) return;
-        const last=hist.results.find(x=>x.score!==null || x.details.length);
-        if(last) await showResult(await api('/evaluations/'+last.evaluation_id));
-      } catch(e) { if(e.message !== 'No evaluation results found') message(e); }
+        const evaluation = await api('/evaluations/'+selected.evaluation_id);
+        if (current()) renderResult({...evaluation, ...selected}, selected.details ?? []);
+      } catch {
+        // The saved result remains visible even if AI evidence cannot be loaded.
+      }
+    } catch (error) {
+      if (!current()) return;
+      if (error.message === 'No evaluation results found') {
+        container.textContent = 'У диалога пока нет завершённой оценки.';
+      } else {
+        container.textContent = 'Не удалось загрузить результаты оценки. Откройте карточку ещё раз.';
+        message(error);
+      }
     }
   }
   async function showResult(e) {
@@ -185,12 +210,16 @@
     const hist = await api('/results/'+encodeURIComponent(id));
     if (!live || active?.conversation_id !== id || e.conversation_id !== id) return;
     const stored = hist.results.find(x=>x.evaluation_id===e.evaluation_id)?.details || [];
+    renderResult(e, stored);
+  }
+  function renderResult(e, stored) {
+    const id = e.conversation_id;
     const raw = Object.values(e.result?.criteria || {});
     $('score-number').textContent=e.score ?? '—';
     $('score-bar').style.width=(e.score ?? 0)+'%';
     const effective = rows.find(row => row.conversation_id === id)?.evaluation;
     $('card-status-badge').textContent =
-      effective?.reviewed && effective.evaluation_id === e.evaluation_id
+      (effective?.reviewed && effective.evaluation_id === e.evaluation_id) || stored.some(criterion => criterion.review)
         ? 'Проверено вручную' : statuses.completed;
     $('score-evaluation-timestamp').textContent='Оценка №'+e.evaluation_id;
     $('critical-flaw-box').className='rounded-xl p-2 text-xs font-bold '+(e.gross_violation?'bg-red-100 text-red-800':'bg-emerald-50 text-emerald-800');
